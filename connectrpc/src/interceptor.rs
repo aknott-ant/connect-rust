@@ -232,11 +232,67 @@ where
     FnInterceptor(f)
 }
 
+/// An ordered, cheaply-cloneable list of interceptors, outermost first.
+///
+/// The one storage type both registration points use
+/// ([`ConnectRpcService`](crate::ConnectRpcService) today, the client
+/// config next). Backed by `Arc<[..]>` so cloning a service handle or a
+/// config is one refcount bump regardless of chain length; `push`
+/// rebuilds the slice, which is fine because registration is a cold path.
+/// Derefs to the slice so call sites pass `&chain` where
+/// `&[Arc<dyn Interceptor>]` is expected.
+#[derive(Clone, Default)]
+pub(crate) struct InterceptorChain(Arc<[Arc<dyn Interceptor>]>);
+
+impl InterceptorChain {
+    /// Append `interceptor` as the new innermost entry.
+    pub(crate) fn push(&mut self, interceptor: Arc<dyn Interceptor>) {
+        let mut v: Vec<Arc<dyn Interceptor>> = self.0.to_vec();
+        v.push(interceptor);
+        self.0 = Arc::from(v);
+    }
+}
+
+impl std::ops::Deref for InterceptorChain {
+    type Target = [Arc<dyn Interceptor>];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for InterceptorChain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `dyn Interceptor` is not `Debug`; the count is what a reader of a
+        // config/service dump actually wants.
+        f.debug_struct("InterceptorChain")
+            .field("len", &self.0.len())
+            .finish()
+    }
+}
+
 /// The continuation an [`Interceptor`] calls to run the rest of the chain.
 ///
 /// `Next` holds the still-to-run interceptors and the terminal handler.
-/// [`run`](Next::run) consumes it: an interceptor can call `next.run(req)`
-/// at most once. Not calling it at all short-circuits the chain.
+/// [`run`](Next::run) consumes it, so the common case — call it once —
+/// needs no ceremony, and not calling it at all short-circuits the chain.
+///
+/// `Next` is also `Clone` (it is two shared references), for the
+/// interceptor that must run the rest of the chain more than once: a
+/// retry or a hedge. Clone *before* the first `run` and build each extra
+/// attempt's request with [`UnaryRequest::try_clone`]:
+///
+/// ```rust,ignore
+/// let spare = req.try_clone()?;            // ctx clone + Payload::try_clone
+/// match next.clone().run(req).await {
+///     Err(e) if e.code == ErrorCode::Unavailable => next.run(spare).await,
+///     done => done,
+/// }
+/// ```
+///
+/// Re-running dispatches the inner interceptors *and the terminal* again.
+/// On the server that means invoking the handler twice, so gate any
+/// re-run on [`Spec::idempotency_level`](crate::Spec::idempotency_level).
+#[derive(Clone)]
 pub struct Next<'a> {
     rest: &'a [Arc<dyn Interceptor>],
     terminal: &'a (dyn UnaryTerminal + 'a),
@@ -253,6 +309,10 @@ impl<'a> Next<'a> {
 
     /// Run the rest of the chain — the next interceptor if any, otherwise
     /// the terminal handler — and return its response.
+    ///
+    /// Consumes `self`. To run the chain again (retry), call
+    /// `next.clone().run(..)` for the earlier attempts; each run re-invokes
+    /// everything below, including the handler on the server.
     ///
     /// # Errors
     ///
@@ -297,23 +357,29 @@ pub(crate) trait UnaryTerminal: Send + Sync {
 /// Carries the dispatch [`RequestContext`] (headers, deadline,
 /// extensions, [`Spec`](crate::Spec), negotiated protocol) and the
 /// lazily-decoded body. Both fields are public so an interceptor can
-/// rewrite headers, inject extensions, or replace the message and pass
-/// the mutated request to [`Next::run`].
+/// rewrite headers ([`ctx.headers_mut()`](RequestContext::headers_mut)),
+/// inject extensions ([`ctx.extensions_mut()`](RequestContext::extensions_mut)),
+/// or replace the message ([`payload.set_message(..)`](Payload::set_message))
+/// and pass the mutated request to [`Next::run`].
 ///
-/// `ctx.spec` is `Some(..)` for generated `FooServiceServer<T>`
+/// `ctx.spec()` is `Some(..)` for generated `FooServiceServer<T>`
 /// dispatchers and for [`Router`](crate::Router) routes registered
 /// through the generated `register()`; it is `None` only for low-level
 /// manual registrations without a
 /// [`Router::with_spec`](crate::Router::with_spec) call.
 ///
 /// `#[non_exhaustive]` so future fields can be added without a
-/// breaking change. Construct with [`UnaryRequest::new`]; destructure
-/// with a trailing `..`.
+/// breaking change. Construct with [`UnaryRequest::new`] (from wire
+/// bytes) or [`UnaryRequest::from_parts`] (from a [`Payload`]); copy for
+/// a second attempt with [`UnaryRequest::try_clone`]; destructure with a
+/// trailing `..`.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct UnaryRequest {
-    /// The dispatch context. Mutating `ctx.headers` or `ctx.extensions`
-    /// before `next.run` propagates to the handler.
+    /// The dispatch context. Changes made through
+    /// [`headers_mut()`](RequestContext::headers_mut) or
+    /// [`extensions_mut()`](RequestContext::extensions_mut) before
+    /// `next.run` propagate to the handler.
     pub ctx: RequestContext,
     /// The lazily-decoded request body. Call
     /// [`set_message`](Payload::set_message) to replace it.
@@ -326,6 +392,42 @@ impl UnaryRequest {
     pub fn new(ctx: RequestContext, body: Bytes, format: CodecFormat) -> Self {
         let payload = Payload::new(body, format).with_decode_options(ctx.decode_options().clone());
         Self { ctx, payload }
+    }
+
+    /// Build a `UnaryRequest` from a context and an existing [`Payload`].
+    ///
+    /// The struct is `#[non_exhaustive]`, so downstream code cannot use a
+    /// struct literal; this is the constructor for an interceptor that
+    /// assembles a request itself, e.g. around a typed message with
+    /// [`Payload::from_message`]. (For a retry copy, prefer
+    /// [`try_clone`](Self::try_clone).)
+    ///
+    /// Unlike [`new`](Self::new), the payload keeps **its own** decode
+    /// options rather than taking the context's. When wrapping untrusted
+    /// wire bytes on the server, carry the service limits across
+    /// explicitly:
+    /// `Payload::new(bytes, fmt).with_decode_options(ctx.decode_options().clone())`.
+    pub fn from_parts(ctx: RequestContext, payload: Payload) -> Self {
+        Self { ctx, payload }
+    }
+
+    /// Copy this request for another trip through the chain.
+    ///
+    /// Clones the context (headers, extensions, deadline, spec) and
+    /// [`Payload::try_clone`]s the body. This is the one call a retry or
+    /// hedging interceptor makes before its first `next.clone().run(req)`;
+    /// see [`Next`] for the full shape. The copies are independent:
+    /// header edits on one attempt do not leak into another.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload holds a replacement that fails to
+    /// encode.
+    pub fn try_clone(&self) -> Result<Self, ConnectError> {
+        Ok(Self {
+            ctx: self.ctx.clone(),
+            payload: self.payload.try_clone()?,
+        })
     }
 }
 
@@ -391,11 +493,13 @@ pub type PayloadStream = BoxStream<Result<Payload, ConnectError>>;
 /// `#[non_exhaustive]` so future fields can be added without a breaking
 /// change. Construct with [`StreamRequest::new`]; destructure with a
 /// trailing `..`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct StreamRequest {
-    /// The dispatch context. Mutating `ctx.headers` or `ctx.extensions`
-    /// before `next.run` propagates to the handler.
+    /// The dispatch context. Changes made through
+    /// [`headers_mut()`](RequestContext::headers_mut) or
+    /// [`extensions_mut()`](RequestContext::extensions_mut) before
+    /// `next.run` propagate to the handler.
     pub ctx: RequestContext,
 }
 
@@ -504,8 +608,12 @@ where
 /// streaming chain.
 ///
 /// `NextStream` holds the still-to-run interceptors and the terminal
-/// handler. [`run`](NextStream::run) consumes it: an interceptor can call
-/// `next.run(req, inbound)` at most once. Not calling it short-circuits.
+/// handler. [`run`](NextStream::run) consumes it. Not calling it
+/// short-circuits. It is `Clone` for symmetry with [`Next`], but
+/// re-running a streaming chain is rarely practical: `run` consumes the
+/// inbound [`PayloadStream`], which cannot be cloned, so a second attempt
+/// needs an inbound stream you buffered or synthesized yourself.
+#[derive(Clone)]
 pub struct NextStream<'a> {
     rest: &'a [Arc<dyn Interceptor>],
     terminal: &'a (dyn StreamTerminal + 'a),
@@ -1221,6 +1329,154 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(resp.headers.get("x-fn").unwrap(), "1");
+    }
+
+    /// `Next` is `Clone`, so an interceptor can run the rest of the chain
+    /// more than once with a fresh request — the retry/hedge shape. Each
+    /// run reaches the inner interceptors and the terminal independently,
+    /// and request mutations (headers here) made per attempt are visible
+    /// below and do not leak between attempts.
+    #[tokio::test]
+    async fn next_is_rerunnable_for_retry() {
+        /// Fails the first attempt, succeeds afterwards; records the
+        /// `x-attempt` header each attempt carried and whether the
+        /// first-attempt-only marker leaked.
+        struct FlakyTerminal {
+            calls: Mutex<Vec<String>>,
+        }
+        #[async_trait::async_trait]
+        impl UnaryTerminal for FlakyTerminal {
+            async fn call(&self, req: UnaryRequest) -> Result<UnaryResponse, ConnectError> {
+                let attempt = req
+                    .ctx
+                    .header("x-attempt")
+                    .map(|v| v.to_str().unwrap().to_owned())
+                    .unwrap_or_default();
+                let mut calls = self.calls.lock().unwrap();
+                calls.push(attempt);
+                if calls.len() == 1 {
+                    return Err(ConnectError::unavailable("first attempt fails"));
+                }
+                assert!(
+                    req.ctx.header("x-first-only").is_none(),
+                    "attempt contexts must be independent (ctx was cloned, not shared)"
+                );
+                // Echo the request body so the test can check the retry
+                // carried the same payload.
+                Ok(UnaryResponse::from_encoded(
+                    EncodedResponse::new(req.payload.encoded()?.into()),
+                    CodecFormat::Proto,
+                ))
+            }
+        }
+
+        struct RetryOnce;
+        #[async_trait::async_trait]
+        impl Interceptor for RetryOnce {
+            async fn intercept_unary(
+                &self,
+                req: UnaryRequest,
+                next: Next<'_>,
+            ) -> Result<UnaryResponse, ConnectError> {
+                // Keep what a second attempt needs *before* moving `req`.
+                let mut second = req.try_clone()?;
+                let mut first = req;
+                first
+                    .ctx
+                    .headers_mut()
+                    .insert("x-attempt", "1".parse().unwrap());
+                first
+                    .ctx
+                    .headers_mut()
+                    .insert("x-first-only", "leak-check".parse().unwrap());
+                match next.clone().run(first).await {
+                    Err(e) if e.code == crate::ErrorCode::Unavailable => {
+                        second
+                            .ctx
+                            .headers_mut()
+                            .insert("x-attempt", "2".parse().unwrap());
+                        next.run(second).await
+                    }
+                    other => other,
+                }
+            }
+        }
+
+        // An inner interceptor proves the *whole* remaining chain re-runs,
+        // not just the terminal.
+        let inner_runs = Arc::new(Mutex::new(0u32));
+        struct Count(Arc<Mutex<u32>>);
+        #[async_trait::async_trait]
+        impl Interceptor for Count {
+            async fn intercept_unary(
+                &self,
+                req: UnaryRequest,
+                next: Next<'_>,
+            ) -> Result<UnaryResponse, ConnectError> {
+                *self.0.lock().unwrap() += 1;
+                next.run(req).await
+            }
+        }
+
+        let chain: Vec<Arc<dyn Interceptor>> = vec![
+            Arc::new(RetryOnce),
+            Arc::new(Count(Arc::clone(&inner_runs))),
+        ];
+        let terminal = FlakyTerminal {
+            calls: Mutex::new(Vec::new()),
+        };
+        let resp = Next::new(&chain, &terminal).run(req()).await.unwrap();
+        assert_eq!(*terminal.calls.lock().unwrap(), vec!["1", "2"]);
+        assert_eq!(*inner_runs.lock().unwrap(), 2, "inner chain re-ran");
+        let echoed: StringValue = resp.body.message::<StringValue>().unwrap().clone();
+        assert_eq!(echoed.value, "hi", "retry carried the original body");
+    }
+
+    #[test]
+    fn interceptor_chain_push_and_debug() {
+        struct Nop;
+        #[async_trait::async_trait]
+        impl Interceptor for Nop {}
+        let mut chain = InterceptorChain::default();
+        assert!(chain.is_empty());
+        let shared = chain.clone();
+        let a: Arc<dyn Interceptor> = Arc::new(Nop);
+        let b: Arc<dyn Interceptor> = Arc::new(Nop);
+        chain.push(Arc::clone(&a));
+        chain.push(Arc::clone(&b));
+        // Deref to slice; `push` appends, so first registered stays
+        // outermost (index 0) — the documented ordering contract.
+        assert_eq!(chain.len(), 2);
+        assert!(Arc::ptr_eq(&chain[0], &a), "first registered is outermost");
+        assert!(Arc::ptr_eq(&chain[1], &b));
+        // `push` rebuilds; an earlier clone is unaffected (registration on
+        // one handle must not retroactively change another).
+        assert!(shared.is_empty());
+        assert!(format!("{chain:?}").contains("len: 2"), "{chain:?}");
+    }
+
+    /// `new` stamps the context's decode options onto the payload;
+    /// `from_parts` deliberately keeps the payload's own. Pinned so the
+    /// difference is a decision, not an accident.
+    #[test]
+    fn from_parts_keeps_payload_decode_options() {
+        let ctx = RequestContext::default()
+            .with_decode_options(buffa::DecodeOptions::new().with_recursion_limit(3));
+        let via_new = UnaryRequest::new(ctx.clone(), Bytes::new(), CodecFormat::Proto);
+        assert_eq!(
+            format!("{:?}", via_new.payload.decode_options()),
+            format!("{:?}", ctx.decode_options()),
+            "new: payload takes ctx options"
+        );
+        let payload = Payload::new(Bytes::new(), CodecFormat::Proto)
+            .with_decode_options(buffa::DecodeOptions::new().with_recursion_limit(9));
+        let want = format!("{:?}", payload.decode_options());
+        let via_parts = UnaryRequest::from_parts(ctx, payload);
+        assert_eq!(
+            format!("{:?}", via_parts.payload.decode_options()),
+            want,
+            "from_parts: payload keeps its own options"
+        );
     }
 
     /// Trailers and the compression hint must round-trip through a
