@@ -46,7 +46,25 @@ pub const FORTUNE_SERVICE_SERVICE_NAME: &str = "fortune.v1.FortuneService";
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `FORTUNE_SERVICE_GET_FORTUNES_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const FORTUNE_SERVICE_GET_FORTUNES_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/fortune.v1.FortuneService/GetFortunes",
+        ::connectrpc::StreamType::Unary,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `GetFortunes` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `FORTUNE_SERVICE_GET_FORTUNES_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+pub const FORTUNE_SERVICE_GET_FORTUNES_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/fortune.v1.FortuneService/GetFortunes",
         ::connectrpc::StreamType::Unary,
     )
@@ -447,8 +465,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                FORTUNE_SERVICE_SERVICE_NAME,
-                "GetFortunes",
+                FORTUNE_SERVICE_GET_FORTUNES_CLIENT_SPEC,
                 request,
                 options,
             )

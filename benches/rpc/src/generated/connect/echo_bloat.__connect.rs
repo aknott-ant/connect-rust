@@ -42,7 +42,25 @@ pub const BLOAT_ECHO_SERVICE_SERVICE_NAME: &str = "bench.v1.BloatEchoService";
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `BLOAT_ECHO_SERVICE_ECHO_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const BLOAT_ECHO_SERVICE_ECHO_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/bench.v1.BloatEchoService/Echo",
+        ::connectrpc::StreamType::Unary,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `Echo` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `BLOAT_ECHO_SERVICE_ECHO_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+pub const BLOAT_ECHO_SERVICE_ECHO_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.v1.BloatEchoService/Echo",
         ::connectrpc::StreamType::Unary,
     )
@@ -435,8 +453,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                BLOAT_ECHO_SERVICE_SERVICE_NAME,
-                "Echo",
+                BLOAT_ECHO_SERVICE_ECHO_CLIENT_SPEC,
                 request,
                 options,
             )

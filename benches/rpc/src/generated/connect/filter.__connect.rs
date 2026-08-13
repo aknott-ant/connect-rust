@@ -42,7 +42,25 @@ pub const FILTER_SERVICE_SERVICE_NAME: &str = "anthropic.connectrpc.filter.v1.Fi
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `FILTER_SERVICE_REDACT_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const FILTER_SERVICE_REDACT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/anthropic.connectrpc.filter.v1.FilterService/Redact",
+        ::connectrpc::StreamType::Unary,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `Redact` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `FILTER_SERVICE_REDACT_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+pub const FILTER_SERVICE_REDACT_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/anthropic.connectrpc.filter.v1.FilterService/Redact",
         ::connectrpc::StreamType::Unary,
     )
@@ -448,8 +466,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                FILTER_SERVICE_SERVICE_NAME,
-                "Redact",
+                FILTER_SERVICE_REDACT_CLIENT_SPEC,
                 request,
                 options,
             )

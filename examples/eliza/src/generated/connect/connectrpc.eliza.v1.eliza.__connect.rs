@@ -130,6 +130,11 @@ pub const ELIZA_SERVICE_SERVICE_NAME: &str = "connectrpc.eliza.v1.ElizaService";
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `ELIZA_SERVICE_SAY_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const ELIZA_SERVICE_SAY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.eliza.v1.ElizaService/Say",
         ::connectrpc::StreamType::Unary,
@@ -139,6 +144,11 @@ pub const ELIZA_SERVICE_SAY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::serve
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `ELIZA_SERVICE_CONVERSE_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const ELIZA_SERVICE_CONVERSE_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.eliza.v1.ElizaService/Converse",
         ::connectrpc::StreamType::BidiStream,
@@ -148,7 +158,51 @@ pub const ELIZA_SERVICE_CONVERSE_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `ELIZA_SERVICE_INTRODUCE_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const ELIZA_SERVICE_INTRODUCE_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/connectrpc.eliza.v1.ElizaService/Introduce",
+        ::connectrpc::StreamType::ServerStream,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `Say` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `ELIZA_SERVICE_SAY_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+pub const ELIZA_SERVICE_SAY_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
+        "/connectrpc.eliza.v1.ElizaService/Say",
+        ::connectrpc::StreamType::Unary,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::NoSideEffects);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `Converse` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `ELIZA_SERVICE_CONVERSE_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+pub const ELIZA_SERVICE_CONVERSE_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
+        "/connectrpc.eliza.v1.ElizaService/Converse",
+        ::connectrpc::StreamType::BidiStream,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `Introduce` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `ELIZA_SERVICE_INTRODUCE_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+pub const ELIZA_SERVICE_INTRODUCE_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/connectrpc.eliza.v1.ElizaService/Introduce",
         ::connectrpc::StreamType::ServerStream,
     )
@@ -704,8 +758,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                ELIZA_SERVICE_SERVICE_NAME,
-                "Say",
+                ELIZA_SERVICE_SAY_CLIENT_SPEC,
                 request,
                 options,
             )
@@ -743,8 +796,7 @@ where
         ::connectrpc::client::call_bidi_stream(
                 &self.transport,
                 &self.config,
-                ELIZA_SERVICE_SERVICE_NAME,
-                "Converse",
+                ELIZA_SERVICE_CONVERSE_CLIENT_SPEC,
                 options,
             )
             .await
@@ -785,8 +837,7 @@ where
         ::connectrpc::client::call_server_stream(
                 &self.transport,
                 &self.config,
-                ELIZA_SERVICE_SERVICE_NAME,
-                "Introduce",
+                ELIZA_SERVICE_INTRODUCE_CLIENT_SPEC,
                 request,
                 options,
             )

@@ -46,6 +46,11 @@ pub const HEALTH_SERVICE_NAME: &str = "grpc.health.v1.Health";
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `HEALTH_CHECK_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const HEALTH_CHECK_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/grpc.health.v1.Health/Check",
         ::connectrpc::StreamType::Unary,
@@ -55,7 +60,40 @@ pub const HEALTH_CHECK_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `HEALTH_WATCH_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const HEALTH_WATCH_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/grpc.health.v1.Health/Watch",
+        ::connectrpc::StreamType::ServerStream,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `Check` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `HEALTH_CHECK_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+#[cfg(feature = "client")]
+pub const HEALTH_CHECK_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
+        "/grpc.health.v1.Health/Check",
+        ::connectrpc::StreamType::Unary,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `Watch` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `HEALTH_WATCH_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+#[cfg(feature = "client")]
+pub const HEALTH_WATCH_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/grpc.health.v1.Health/Watch",
         ::connectrpc::StreamType::ServerStream,
     )
@@ -555,8 +593,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                HEALTH_SERVICE_NAME,
-                "Check",
+                HEALTH_CHECK_CLIENT_SPEC,
                 request,
                 options,
             )
@@ -595,8 +632,7 @@ where
         ::connectrpc::client::call_server_stream(
                 &self.transport,
                 &self.config,
-                HEALTH_SERVICE_NAME,
-                "Watch",
+                HEALTH_WATCH_CLIENT_SPEC,
                 request,
                 options,
             )

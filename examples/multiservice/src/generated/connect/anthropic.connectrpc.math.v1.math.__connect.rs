@@ -50,7 +50,25 @@ pub const MATH_SERVICE_SERVICE_NAME: &str = "anthropic.connectrpc.math.v1.MathSe
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `MATH_SERVICE_ADD_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const MATH_SERVICE_ADD_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/anthropic.connectrpc.math.v1.MathService/Add",
+        ::connectrpc::StreamType::Unary,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `Add` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `MATH_SERVICE_ADD_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+pub const MATH_SERVICE_ADD_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/anthropic.connectrpc.math.v1.MathService/Add",
         ::connectrpc::StreamType::Unary,
     )
@@ -454,8 +472,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                MATH_SERVICE_SERVICE_NAME,
-                "Add",
+                MATH_SERVICE_ADD_CLIENT_SPEC,
                 request,
                 options,
             )

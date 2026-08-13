@@ -58,7 +58,26 @@ pub const SERVER_REFLECTION_SERVICE_NAME: &str = "grpc.reflection.v1alpha.Server
 ///
 /// The dispatcher surfaces this on
 /// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
+///
+/// Client sibling: `SERVER_REFLECTION_SERVER_REFLECTION_INFO_CLIENT_SPEC`. The two are not `==` (their
+/// [`origin`](::connectrpc::Spec::origin) differs); use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method on either side.
 pub const SERVER_REFLECTION_SERVER_REFLECTION_INFO_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+        ::connectrpc::StreamType::BidiStream,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Static [`Spec`](::connectrpc::Spec) for the client-side `ServerReflectionInfo` RPC.
+///
+/// The generated client passes this to the runtime, so it is the value a
+/// client-side interceptor observes. It differs from the server-side
+/// `SERVER_REFLECTION_SERVER_REFLECTION_INFO_SPEC` only in [`origin`](::connectrpc::Spec::origin),
+/// so the two are **not** `==`; use
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
+/// `procedure` to match this method regardless of side.
+#[cfg(feature = "client")]
+pub const SERVER_REFLECTION_SERVER_REFLECTION_INFO_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
         ::connectrpc::StreamType::BidiStream,
     )
@@ -450,8 +469,7 @@ where
         ::connectrpc::client::call_bidi_stream(
                 &self.transport,
                 &self.config,
-                SERVER_REFLECTION_SERVICE_NAME,
-                "ServerReflectionInfo",
+                SERVER_REFLECTION_SERVER_REFLECTION_INFO_CLIENT_SPEC,
                 options,
             )
             .await

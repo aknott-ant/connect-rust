@@ -187,6 +187,16 @@ impl Spec {
     /// contains a `/Service/Method` separator so a malformed test fixture
     /// fails loudly rather than producing misleading [`service`](Spec::service)
     /// / [`method`](Spec::method) accessor results.
+    ///
+    /// # Building one without generated code
+    ///
+    /// `procedure` is `&'static str` because a `Spec` is meant to be a
+    /// per-method constant. A hand-written client with a fixed set of
+    /// methods uses string literals. A truly dynamic caller (a proxy or CLI
+    /// that learns method names at runtime) should **intern** each distinct
+    /// procedure once — e.g. keep a `HashMap<String, Spec>` and `Box::leak`
+    /// the string only on first sight — rather than leaking per call, which
+    /// grows without bound.
     pub const fn client(procedure: &'static str, stream_type: StreamType) -> Self {
         debug_assert_well_formed(procedure);
         Self {
@@ -203,6 +213,19 @@ impl Spec {
     pub const fn with_idempotency_level(mut self, idempotency_level: IdempotencyLevel) -> Self {
         self.idempotency_level = idempotency_level;
         self
+    }
+
+    /// Whether `self` and `other` describe the same RPC method, ignoring
+    /// which side ([`origin`](Spec::origin)) produced them.
+    ///
+    /// `Spec` derives `PartialEq` over *all* fields, so the generated
+    /// server constant `FOO_SERVICE_BAR_SPEC` and its client sibling
+    /// `FOO_SERVICE_BAR_CLIENT_SPEC` are **not** `==`. Use this (or compare
+    /// [`procedure`](Spec::procedure) directly) when an interceptor that
+    /// runs on both sides asks "is this the `Bar` method?".
+    #[must_use]
+    pub fn same_method(&self, other: &Spec) -> bool {
+        self.procedure == other.procedure
     }
 
     /// The bare service name (`"package.Service"`) from
@@ -290,6 +313,21 @@ mod tests {
         assert_eq!(SPEC.stream_type, StreamType::Unary);
         assert_eq!(SPEC.idempotency_level, IdempotencyLevel::NoSideEffects);
         const { assert!(matches!(SPEC.origin, SpecOrigin::Server)) };
+    }
+
+    /// The generated server/client siblings for one method are not `==`
+    /// (origin differs) but are `same_method`; different methods are not.
+    #[test]
+    fn same_method_ignores_origin() {
+        const SERVER: Spec = Spec::server("/pkg.Greet/Say", StreamType::Unary)
+            .with_idempotency_level(IdempotencyLevel::NoSideEffects);
+        const CLIENT: Spec = Spec::client("/pkg.Greet/Say", StreamType::Unary)
+            .with_idempotency_level(IdempotencyLevel::NoSideEffects);
+        const OTHER: Spec = Spec::client("/pkg.Greet/Shout", StreamType::Unary);
+        assert_ne!(SERVER, CLIENT, "PartialEq includes origin");
+        assert!(SERVER.same_method(&CLIENT));
+        assert!(CLIENT.same_method(&SERVER));
+        assert!(!CLIENT.same_method(&OTHER));
     }
 
     #[test]
