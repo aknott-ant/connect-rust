@@ -264,27 +264,30 @@ impl Spec {
 /// release builds.
 const fn debug_assert_well_formed(procedure: &str) {
     if cfg!(debug_assertions) {
-        let bytes = procedure.as_bytes();
-        // Must start with '/'.
         assert!(
-            !bytes.is_empty() && bytes[0] == b'/',
-            "Spec procedure must start with '/' (e.g. \"/pkg.Service/Method\")"
-        );
-        // Must have a second '/' separating Service from Method.
-        let mut has_inner_slash = false;
-        let mut i = 1;
-        while i < bytes.len() {
-            if bytes[i] == b'/' {
-                has_inner_slash = true;
-                break;
-            }
-            i += 1;
-        }
-        assert!(
-            has_inner_slash,
-            "Spec procedure must contain a '/Service/Method' separator (e.g. \"/pkg.Service/Method\")"
+            procedure_is_well_formed(procedure),
+            "Spec procedure must start with '/' and contain a '/Service/Method' separator (e.g. \"/pkg.Service/Method\")"
         );
     }
+}
+
+/// Whether `procedure` looks like `"/package.Service/Method"`: a leading
+/// slash and at least one interior slash. The one definition of
+/// "well-formed" shared by the constructors' debug assertion above and the
+/// client entry points' release-mode check.
+pub(crate) const fn procedure_is_well_formed(procedure: &str) -> bool {
+    let bytes = procedure.as_bytes();
+    if bytes.is_empty() || bytes[0] != b'/' {
+        return false;
+    }
+    let mut i = 1;
+    while i < bytes.len() {
+        if bytes[i] == b'/' {
+            return true;
+        }
+        i += 1;
+    }
+    false
 }
 
 #[cfg(test)]
@@ -313,6 +316,19 @@ mod tests {
         assert_eq!(SPEC.stream_type, StreamType::Unary);
         assert_eq!(SPEC.idempotency_level, IdempotencyLevel::NoSideEffects);
         const { assert!(matches!(SPEC.origin, SpecOrigin::Server)) };
+    }
+
+    #[test]
+    fn procedure_well_formedness() {
+        assert!(procedure_is_well_formed("/pkg.Svc/M"));
+        assert!(procedure_is_well_formed("/Svc/M"));
+        assert!(!procedure_is_well_formed("pkg.Svc/M"), "no leading slash");
+        assert!(
+            !procedure_is_well_formed("/pkg.SvcM"),
+            "no method separator"
+        );
+        assert!(!procedure_is_well_formed(""));
+        assert!(!procedure_is_well_formed("/"));
     }
 
     /// The generated server/client siblings for one method are not `==`
@@ -347,7 +363,7 @@ mod tests {
     #[test]
     #[cfg_attr(
         debug_assertions,
-        should_panic(expected = "Spec procedure must contain a '/Service/Method' separator")
+        should_panic(expected = "contain a '/Service/Method' separator")
     )]
     fn spec_malformed_path_no_method_separator_debug_asserts() {
         let _ = Spec::server("/nopath", StreamType::Unary);

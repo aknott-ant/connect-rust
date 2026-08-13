@@ -52,14 +52,10 @@ pub const BLOAT_ECHO_SERVICE_ECHO_SPEC: ::connectrpc::Spec = ::connectrpc::Spec:
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `Echo` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `BLOAT_ECHO_SERVICE_ECHO_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
+/// Client-side sibling of `BLOAT_ECHO_SERVICE_ECHO_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
 pub const BLOAT_ECHO_SERVICE_ECHO_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.v1.BloatEchoService/Echo",
         ::connectrpc::StreamType::Unary,

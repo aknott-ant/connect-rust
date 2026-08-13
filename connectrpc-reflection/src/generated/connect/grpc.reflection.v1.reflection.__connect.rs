@@ -66,14 +66,10 @@ pub const SERVER_REFLECTION_SERVER_REFLECTION_INFO_SPEC: ::connectrpc::Spec = ::
         ::connectrpc::StreamType::BidiStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `ServerReflectionInfo` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `SERVER_REFLECTION_SERVER_REFLECTION_INFO_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
+/// Client-side sibling of `SERVER_REFLECTION_SERVER_REFLECTION_INFO_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
 #[cfg(feature = "client")]
 pub const SERVER_REFLECTION_SERVER_REFLECTION_INFO_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",

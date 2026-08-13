@@ -178,6 +178,15 @@ pub const BENCH_SERVICE_UNARY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::ser
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Client-side sibling of `BENCH_SERVICE_UNARY_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
+pub const BENCH_SERVICE_UNARY_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
+        "/bench.v1.BenchService/Unary",
+        ::connectrpc::StreamType::Unary,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
 /// Static [`Spec`](::connectrpc::Spec) for the server-side `ServerStream` RPC.
 ///
 /// The dispatcher surfaces this on
@@ -188,6 +197,15 @@ pub const BENCH_SERVICE_UNARY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::ser
 /// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
 /// `procedure` to match this method on either side.
 pub const BENCH_SERVICE_SERVER_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/bench.v1.BenchService/ServerStream",
+        ::connectrpc::StreamType::ServerStream,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Client-side sibling of `BENCH_SERVICE_SERVER_STREAM_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
+pub const BENCH_SERVICE_SERVER_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.v1.BenchService/ServerStream",
         ::connectrpc::StreamType::ServerStream,
     )
@@ -206,6 +224,15 @@ pub const BENCH_SERVICE_CLIENT_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::S
         ::connectrpc::StreamType::ClientStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Client-side sibling of `BENCH_SERVICE_CLIENT_STREAM_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
+pub const BENCH_SERVICE_CLIENT_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
+        "/bench.v1.BenchService/ClientStream",
+        ::connectrpc::StreamType::ClientStream,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
 /// Static [`Spec`](::connectrpc::Spec) for the server-side `BidiStream` RPC.
 ///
 /// The dispatcher surfaces this on
@@ -216,6 +243,15 @@ pub const BENCH_SERVICE_CLIENT_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::S
 /// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
 /// `procedure` to match this method on either side.
 pub const BENCH_SERVICE_BIDI_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
+        "/bench.v1.BenchService/BidiStream",
+        ::connectrpc::StreamType::BidiStream,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Client-side sibling of `BENCH_SERVICE_BIDI_STREAM_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
+pub const BENCH_SERVICE_BIDI_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.v1.BenchService/BidiStream",
         ::connectrpc::StreamType::BidiStream,
     )
@@ -234,6 +270,15 @@ pub const BENCH_SERVICE_LOG_UNARY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec:
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
+/// Client-side sibling of `BENCH_SERVICE_LOG_UNARY_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
+pub const BENCH_SERVICE_LOG_UNARY_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
+        "/bench.v1.BenchService/LogUnary",
+        ::connectrpc::StreamType::Unary,
+    )
+    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
 /// Static [`Spec`](::connectrpc::Spec) for the server-side `LogUnaryOwned` RPC.
 ///
 /// The dispatcher surfaces this on
@@ -248,79 +293,10 @@ pub const BENCH_SERVICE_LOG_UNARY_OWNED_SPEC: ::connectrpc::Spec = ::connectrpc:
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `Unary` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `BENCH_SERVICE_UNARY_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
-pub const BENCH_SERVICE_UNARY_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/bench.v1.BenchService/Unary",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `ServerStream` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `BENCH_SERVICE_SERVER_STREAM_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
-pub const BENCH_SERVICE_SERVER_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/bench.v1.BenchService/ServerStream",
-        ::connectrpc::StreamType::ServerStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `ClientStream` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `BENCH_SERVICE_CLIENT_STREAM_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
-pub const BENCH_SERVICE_CLIENT_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/bench.v1.BenchService/ClientStream",
-        ::connectrpc::StreamType::ClientStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `BidiStream` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `BENCH_SERVICE_BIDI_STREAM_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
-pub const BENCH_SERVICE_BIDI_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/bench.v1.BenchService/BidiStream",
-        ::connectrpc::StreamType::BidiStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `LogUnary` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `BENCH_SERVICE_LOG_UNARY_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
-pub const BENCH_SERVICE_LOG_UNARY_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/bench.v1.BenchService/LogUnary",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `LogUnaryOwned` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `BENCH_SERVICE_LOG_UNARY_OWNED_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
+/// Client-side sibling of `BENCH_SERVICE_LOG_UNARY_OWNED_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
 pub const BENCH_SERVICE_LOG_UNARY_OWNED_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.v1.BenchService/LogUnaryOwned",
         ::connectrpc::StreamType::Unary,
@@ -1298,14 +1274,10 @@ pub const ECHO_SERVICE_ECHO_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::serve
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `Echo` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `ECHO_SERVICE_ECHO_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
+/// Client-side sibling of `ECHO_SERVICE_ECHO_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
 pub const ECHO_SERVICE_ECHO_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.v1.EchoService/Echo",
         ::connectrpc::StreamType::Unary,
@@ -1720,14 +1692,10 @@ pub const LOG_INGEST_SERVICE_INGEST_SPEC: ::connectrpc::Spec = ::connectrpc::Spe
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `Ingest` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `LOG_INGEST_SERVICE_INGEST_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
+/// Client-side sibling of `LOG_INGEST_SERVICE_INGEST_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
 pub const LOG_INGEST_SERVICE_INGEST_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.v1.LogIngestService/Ingest",
         ::connectrpc::StreamType::Unary,

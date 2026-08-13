@@ -21,7 +21,7 @@ use connectrpc::client::{
 use connectrpc::error::{ConnectError, ErrorCode};
 use connectrpc::rustls;
 use connectrpc::{
-    CodecFormat, CompressionRegistry, Spec, StreamType as RpcStreamType,
+    CodecFormat, CompressionRegistry, Spec,
     compression::{GzipProvider, ZstdProvider},
 };
 use connectrpc_conformance::ClientCompatRequest;
@@ -39,6 +39,12 @@ use connectrpc_conformance::{
     BidiStreamResponseView, ClientStreamResponseView, IdempotentUnaryResponseView,
     ServerStreamResponseView, UnaryResponseView,
 };
+use connectrpc_conformance::{
+    CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC, CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC,
+    CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC,
+    CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC, CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC,
+    CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC,
+};
 use hyper::Request;
 use hyper::Response;
 use hyper_util::rt::TokioIo;
@@ -49,60 +55,6 @@ use tracing_subscriber::EnvFilter;
 // ============================================================================
 // ConformanceTransport — wraps low-level hyper connections as a ClientTransport
 // ============================================================================
-
-/// Resolve the runner-supplied `(service, method)` strings to a client
-/// [`Spec`].
-///
-/// This binary is the rare *dynamic* caller of the `call_*` entry points:
-/// method names arrive at runtime from the test runner. Every request the
-/// runner actually sends targets `ConformanceService`, so it maps onto one
-/// of the generated `*_CLIENT_SPEC` constants (matched on procedure *and*
-/// stream shape, so a runner method routed to a differently-shaped entry
-/// point falls through rather than tripping the runtime's spec check; the
-/// constants also carry the right idempotency level). Anything else gets an
-/// ad-hoc `Spec` so the call still goes out and the server can answer
-/// `Unimplemented`, as the reference client does. `Spec::procedure` is
-/// `&'static str`, so ad-hoc procedures are **interned**: each distinct
-/// `(procedure, shape)` is leaked once and reused, which is the pattern a
-/// production dynamic client should copy (leaking per call would grow
-/// without bound).
-fn client_spec(service: &str, method: &str, stream_type: RpcStreamType) -> Spec {
-    use connectrpc_conformance::{
-        CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC, CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC,
-        CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC,
-        CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC, CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC,
-        CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC,
-    };
-    const KNOWN: [Spec; 6] = [
-        CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC,
-        CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC,
-        CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC,
-        CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC,
-        CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC,
-        CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC,
-    ];
-    static AD_HOC: std::sync::OnceLock<
-        std::sync::Mutex<std::collections::HashMap<(String, RpcStreamType), Spec>>,
-    > = std::sync::OnceLock::new();
-
-    let procedure = format!("/{service}/{method}");
-    if let Some(spec) = KNOWN
-        .iter()
-        .copied()
-        .find(|spec| spec.procedure == procedure && spec.stream_type == stream_type)
-    {
-        return spec;
-    }
-    let mut interned = AD_HOC
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    *interned
-        .entry((procedure, stream_type))
-        .or_insert_with_key(|(procedure, stream_type)| {
-            Spec::client(Box::leak(procedure.clone().into_boxed_str()), *stream_type)
-        })
-}
 
 /// Transport that opens a fresh TCP (+ optional TLS) connection per request.
 ///
@@ -518,11 +470,6 @@ async fn do_unary_call(
 ) -> Result<ClientResponseResult> {
     let use_tls = !req.server_tls_cert.is_empty();
 
-    // Determine service and method
-    let service = req
-        .service
-        .as_deref()
-        .unwrap_or("connectrpc.conformance.v1.ConformanceService");
     let method = req.method.as_deref().unwrap_or("Unary");
 
     let transport = ConformanceTransport::from_request(req, http_version);
@@ -578,19 +525,19 @@ async fn do_unary_call(
     // Dispatch based on method to get correct types. Use GET if the request
     // asks for it (Connect protocol only — call_unary_get will error otherwise).
     let use_get = req.use_get_http_method;
-    let spec = client_spec(service, method, RpcStreamType::Unary);
 
     // Macro: picks call_unary or call_unary_get based on use_get. Avoids
-    // duplicating the three match arms for the GET/POST choice.
+    // duplicating the three match arms for the GET/POST choice. Each arm
+    // passes the generated `*_CLIENT_SPEC` for its method.
     macro_rules! do_call {
-        ($req_ty:ty, $resp_view:ty, $request:expr) => {
+        ($spec:expr, $req_ty:ty, $resp_view:ty, $request:expr) => {
             if use_get {
                 call_unary_get::<_, $req_ty, $resp_view>(
-                    &transport, &config, spec, $request, options,
+                    &transport, &config, $spec, $request, options,
                 )
                 .await?
             } else {
-                call_unary::<_, $req_ty, $resp_view>(&transport, &config, spec, $request, options)
+                call_unary::<_, $req_ty, $resp_view>(&transport, &config, $spec, $request, options)
                     .await?
             }
         };
@@ -602,7 +549,12 @@ async fn do_unary_call(
                 use connectrpc_conformance::UnaryRequest;
                 let request = UnaryRequest::decode_from_slice(proto_bytes)
                     .map_err(|e| ConnectError::internal(format!("decode request: {e}")))?;
-                let resp = do_call!(UnaryRequest, UnaryResponseView<'static>, request);
+                let resp = do_call!(
+                    CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC,
+                    UnaryRequest,
+                    UnaryResponseView<'static>,
+                    request
+                );
                 let (headers, message, trailers) = resp.into_owned_parts();
                 let payload = if message.payload.is_set() {
                     message.payload.as_option().unwrap().clone()
@@ -616,6 +568,7 @@ async fn do_unary_call(
                 let request = IdempotentUnaryRequest::decode_from_slice(proto_bytes)
                     .map_err(|e| ConnectError::internal(format!("decode request: {e}")))?;
                 let resp = do_call!(
+                    CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC,
                     IdempotentUnaryRequest,
                     IdempotentUnaryResponseView<'static>,
                     request
@@ -628,11 +581,25 @@ async fn do_unary_call(
                 };
                 Ok((headers, payload, trailers))
             }
-            _ => {
-                // Unknown method (e.g., "Unimplemented") -- use UnaryRequest as best-effort
+            other => {
+                // "Unimplemented" is a real method with a generated Spec; any
+                // other name (never sent by the suite) gets an ad-hoc Spec so
+                // the call still goes out. Leaked per call — fine in a test
+                // binary; a production dynamic caller should intern (see
+                // `Spec::client`).
                 use connectrpc_conformance::UnaryRequest;
+                let spec = if other == "Unimplemented" {
+                    CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC
+                } else {
+                    let procedure =
+                        format!("/connectrpc.conformance.v1.ConformanceService/{other}");
+                    Spec::client(
+                        Box::leak(procedure.into_boxed_str()),
+                        connectrpc::StreamType::Unary,
+                    )
+                };
                 let request = UnaryRequest::decode_from_slice(proto_bytes).unwrap_or_default();
-                let resp = do_call!(UnaryRequest, UnaryResponseView<'static>, request);
+                let resp = do_call!(spec, UnaryRequest, UnaryResponseView<'static>, request);
                 let (headers, message, trailers) = resp.into_owned_parts();
                 let payload = if message.payload.is_set() {
                     message.payload.as_option().unwrap().clone()
@@ -728,13 +695,6 @@ async fn do_server_stream_call(
 ) -> Result<ClientResponseResult> {
     let use_tls = !req.server_tls_cert.is_empty();
 
-    // Determine service and method
-    let service = req
-        .service
-        .as_deref()
-        .unwrap_or("connectrpc.conformance.v1.ConformanceService");
-    let method = req.method.as_deref().unwrap_or("ServerStream");
-
     let transport = ConformanceTransport::from_request(req, http_version);
 
     // Build client config. For streaming, only register the requested
@@ -792,7 +752,7 @@ async fn do_server_stream_call(
         call_server_stream::<_, ServerStreamRequest, ServerStreamResponseView<'static>>(
             &transport,
             &config,
-            client_spec(service, method, RpcStreamType::ServerStream),
+            CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC,
             request,
             options,
         )
@@ -1036,13 +996,6 @@ async fn do_client_stream_call(
 ) -> Result<ClientResponseResult> {
     let use_tls = !req.server_tls_cert.is_empty();
 
-    // Determine service and method
-    let service = req
-        .service
-        .as_deref()
-        .unwrap_or("connectrpc.conformance.v1.ConformanceService");
-    let method = req.method.as_deref().unwrap_or("ClientStream");
-
     let transport = ConformanceTransport::from_request(req, http_version);
 
     // Build client config (streaming — only requested encoding).
@@ -1098,7 +1051,7 @@ async fn do_client_stream_call(
         let resp = call_client_stream::<_, ClientStreamRequest, ClientStreamResponseView<'static>>(
             &transport,
             &config,
-            client_spec(service, method, RpcStreamType::ClientStream),
+            CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC,
             futures::stream::iter(requests),
             options,
         )
@@ -1206,11 +1159,6 @@ async fn do_bidi_stream_call(
     use connectrpc_conformance::BidiStreamRequest;
 
     let use_tls = !req.server_tls_cert.is_empty();
-    let service = req
-        .service
-        .as_deref()
-        .unwrap_or("connectrpc.conformance.v1.ConformanceService");
-    let method = req.method.as_deref().unwrap_or("BidiStream");
 
     let transport = ConformanceTransport::from_request(req, http_version);
 
@@ -1270,7 +1218,7 @@ async fn do_bidi_stream_call(
         match call_bidi_stream::<_, BidiStreamRequest, BidiStreamResponseView<'static>>(
             &transport,
             &config,
-            client_spec(service, method, RpcStreamType::BidiStream),
+            CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC,
             options,
         )
         .await

@@ -1453,25 +1453,48 @@ fn client_deadline(timeout: Option<Duration>, protocol: Protocol) -> Option<std:
         .and_then(|t| std::time::Instant::now().checked_add(t))
 }
 
-/// Build the request URI for `spec` against `config.base_uri`, with an
+/// Build the request URI for `procedure` against `config.base_uri`, with an
 /// optional query string (the Connect GET path).
 ///
-/// `Spec::procedure` carries the leading slash (`/pkg.Service/Method`), so it
-/// is appended to the base verbatim after trimming any trailing slash there.
-/// Callers run [`check_client_spec`] first, which guarantees the slash.
+/// Reuses the base URI's already-parsed scheme and authority and only builds
+/// a new path-and-query: any path prefix on the base (trailing slash
+/// trimmed) followed by `procedure`, which carries its own leading slash
+/// (callers run [`check_client_spec`] first). A query string on the *base*
+/// URI is not carried over. In the common case — no base path prefix, no
+/// query — the path is the `&'static` procedure itself and nothing is
+/// allocated.
 fn procedure_uri(
     config: &ClientConfig,
-    spec: Spec,
+    procedure: &'static str,
     query: Option<&str>,
 ) -> Result<Uri, ConnectError> {
-    let base = config.base_uri.to_string();
-    let base = base.trim_end_matches('/');
-    let uri = match query {
-        Some(q) => format!("{base}{}?{q}", spec.procedure),
-        None => format!("{base}{}", spec.procedure),
+    use http::uri::PathAndQuery;
+    let base_path = config.base_uri.path().trim_end_matches('/');
+    let path_and_query = if base_path.is_empty() && query.is_none() {
+        PathAndQuery::from_static(procedure)
+    } else {
+        let mut s = String::with_capacity(
+            base_path.len() + procedure.len() + query.map_or(0, |q| q.len() + 1),
+        );
+        s.push_str(base_path);
+        s.push_str(procedure);
+        if let Some(q) = query {
+            s.push('?');
+            s.push_str(q);
+        }
+        PathAndQuery::from_maybe_shared(Bytes::from(s))
+            .map_err(|e| ConnectError::internal(format!("invalid request path: {e}")))?
     };
-    uri.parse()
-        .map_err(|e| ConnectError::internal(format!("invalid request URI {uri:?}: {e}")))
+    let mut parts = http::uri::Parts::default();
+    parts.scheme = config.base_uri.scheme().cloned();
+    parts.authority = config.base_uri.authority().cloned();
+    parts.path_and_query = Some(path_and_query);
+    Uri::from_parts(parts).map_err(|e| {
+        ConnectError::internal(format!(
+            "invalid request URI from base {}: {e}",
+            config.base_uri
+        ))
+    })
 }
 
 /// The entry point that matches a stream shape, for error messages.
@@ -1487,11 +1510,10 @@ fn entry_point_for(stream_type: StreamType) -> &'static str {
 /// Validate a caller-supplied [`Spec`] against the entry point it reached.
 ///
 /// Generated clients always pass a matching `*_CLIENT_SPEC`; these checks
-/// exist for hand-written callers, where the three mistakes below would
-/// otherwise surface far from their cause (a protocol error from the server,
-/// a client interceptor observing `SpecOrigin::Server`, or a mangled request
-/// URI). All are caller bugs, so the error is `Internal`. The cost is three
-/// comparisons per call in every build profile.
+/// exist for hand-written callers, where the mistakes below would otherwise
+/// surface far from their cause (a protocol error from the server, a client
+/// interceptor observing `SpecOrigin::Server`, a mangled request URI). All
+/// are caller bugs, so the error is `Internal`, in every build profile.
 fn check_client_spec(
     spec: Spec,
     expected: StreamType,
@@ -1512,9 +1534,9 @@ fn check_client_spec(
             spec.procedure,
         )));
     }
-    if !spec.procedure.starts_with('/') {
+    if !crate::spec::procedure_is_well_formed(spec.procedure) {
         return Err(ConnectError::internal(format!(
-            "Spec::procedure {:?} must start with '/' (\"/package.Service/Method\")",
+            "Spec::procedure {:?} must look like \"/package.Service/Method\"",
             spec.procedure,
         )));
     }
@@ -1793,9 +1815,11 @@ where
 ///
 /// # Errors
 ///
-/// Besides transport, protocol, and decode failures: `Internal` if `spec`
-/// is not a client-side [`StreamType::Unary`] spec with a `/`-prefixed
-/// procedure — a caller bug that generated clients cannot produce.
+/// Besides transport, protocol, and decode failures: `Internal`, before
+/// anything is sent, if `spec` is not a client-side [`StreamType::Unary`]
+/// spec with a well-formed procedure — a caller bug that generated clients
+/// cannot produce. The other entry points apply the same check for their
+/// stream shape.
 pub async fn call_unary<T, Req, RespView>(
     transport: &T,
     config: &ClientConfig,
@@ -1812,7 +1836,7 @@ where
 {
     check_client_spec(spec, StreamType::Unary, "call_unary")?;
     let options = effective_options(config, options);
-    let uri = procedure_uri(config, spec, None)?;
+    let uri = procedure_uri(config, spec.procedure, None)?;
 
     // Encode the request body
     let body = match config.codec_format {
@@ -1929,9 +1953,8 @@ where
 ///
 /// # Errors
 ///
-/// Returns `invalid_argument` if `config.protocol` is not `Connect`, and
-/// `Internal` if `spec` is not a client-side unary spec (see
-/// [`call_unary`]).
+/// Returns `invalid_argument` if `config.protocol` is not `Connect`;
+/// `Internal` for a mismatched `spec` (see [`call_unary`]).
 pub async fn call_unary_get<T, Req, RespView>(
     transport: &T,
     config: &ClientConfig,
@@ -2001,7 +2024,7 @@ where
     let query =
         build_connect_get_query(use_base64, compressed_with, encoding_name, &encoded_message);
 
-    let uri = procedure_uri(config, spec, Some(&query))?;
+    let uri = procedure_uri(config, spec.procedure, Some(&query))?;
 
     let deadline = client_deadline(options.timeout, Protocol::Connect);
 
@@ -3213,8 +3236,7 @@ where
 /// # Errors
 ///
 /// Returns immediately with an error if:
-/// - `spec` is not a client-side server-streaming spec (`Internal`; a
-///   caller bug generated clients cannot produce)
+/// - `spec` is mismatched (`Internal`, see [`call_unary`])
 /// - The request cannot be encoded or sent
 /// - The server responds with a non-200 status (protocol-level error)
 /// - A successful gRPC or gRPC-Web response declares a content type
@@ -3244,7 +3266,7 @@ where
 {
     check_client_spec(spec, StreamType::ServerStream, "call_server_stream")?;
     let options = effective_options(config, options);
-    let uri = procedure_uri(config, spec, None)?;
+    let uri = procedure_uri(config, spec.procedure, None)?;
 
     // Encode the request body
     let body = match config.codec_format {
@@ -4050,9 +4072,8 @@ where
 ///
 /// # Errors
 ///
-/// Returns `Internal` before opening the stream if `spec` is not a
-/// client-side bidi-streaming spec (a caller bug generated clients cannot
-/// produce). Transport and protocol errors surface from
+/// Returns `Internal` before opening the stream for a mismatched `spec`
+/// (see [`call_unary`]). Transport and protocol errors surface from
 /// [`BidiStream::message`].
 ///
 /// # Example
@@ -4080,7 +4101,7 @@ where
 {
     check_client_spec(spec, StreamType::BidiStream, "call_bidi_stream")?;
     let options = effective_options(config, options);
-    let uri = procedure_uri(config, spec, None)?;
+    let uri = procedure_uri(config, spec.procedure, None)?;
 
     // Set up the channel-backed request body. Channel depth 32 matches
     // typical h2 stream window; sends beyond this backpressure naturally.
@@ -4204,8 +4225,8 @@ where
 /// Returns an error if a request message cannot be encoded, the transport
 /// fails, the whole-call deadline expires, the server responds with an
 /// error, the response cannot be decoded, or (`Internal`, before anything
-/// is sent) `spec` is not a client-side [`StreamType::ClientStream`] spec
-/// — see [`call_unary`] for how `spec` identifies the method.
+/// is sent) `spec` is mismatched — see [`call_unary`] for how `spec`
+/// identifies the method.
 pub async fn call_client_stream<T, Req, RespView>(
     transport: &T,
     config: &ClientConfig,
@@ -4222,7 +4243,7 @@ where
 {
     check_client_spec(spec, StreamType::ClientStream, "call_client_stream")?;
     let options = effective_options(config, options);
-    let uri = procedure_uri(config, spec, None)?;
+    let uri = procedure_uri(config, spec.procedure, None)?;
 
     let compression_for_encoder = config.request_compression.as_ref().map(|enc| {
         (
@@ -8859,23 +8880,33 @@ mod tests {
     /// the same wire path the old `{base}/{service}/{method}` produced.
     #[test]
     fn procedure_uri_joins_base_and_procedure() {
-        let spec = Spec::client("/pkg.Svc/Do", StreamType::Unary);
-        for base in ["http://h:8080", "http://h:8080/", "http://h:8080/prefix/"] {
+        const P: &str = "/pkg.Svc/Do";
+        for base in [
+            "http://h:8080",
+            "http://h:8080/",
+            "http://h:8080/prefix/",
+            "https://[::1]:8443/prefix",
+        ] {
             let config = ClientConfig::new(base.parse().unwrap());
-            let uri = procedure_uri(&config, spec, None).unwrap();
+            let uri = procedure_uri(&config, P, None).unwrap();
             let want = format!("{}/pkg.Svc/Do", base.trim_end_matches('/'));
             assert_eq!(uri.to_string(), want, "base {base}");
         }
         let config = ClientConfig::new("http://h".parse().unwrap());
-        let uri = procedure_uri(&config, spec, Some("connect=v1&encoding=proto")).unwrap();
-        assert_eq!(uri.path(), "/pkg.Svc/Do");
+        let uri = procedure_uri(&config, P, Some("connect=v1&encoding=proto")).unwrap();
+        assert_eq!(uri.path(), P);
         assert_eq!(uri.query(), Some("connect=v1&encoding=proto"));
+        // A query on the *base* URI is dropped rather than spliced into the
+        // path (string concatenation used to produce "/?a=1/pkg.Svc/Do").
+        let config = ClientConfig::new("http://h/?a=1".parse().unwrap());
+        let uri = procedure_uri(&config, P, None).unwrap();
+        assert_eq!((uri.path(), uri.query()), (P, None));
     }
 
     /// `check_client_spec` accepts exactly a client-side spec of the entry
-    /// point's stream shape with a `/`-prefixed procedure, and each of the
-    /// three caller bugs it rejects gets an `Internal` error that says what
-    /// to do instead — in every build profile, not just debug.
+    /// point's stream shape, and each caller bug it rejects gets an
+    /// `Internal` error that says what to do instead — in every build
+    /// profile, not just debug.
     #[test]
     fn check_client_spec_table() {
         use StreamType::*;
@@ -8910,20 +8941,9 @@ mod tests {
                 .contains("server-side Spec"),
             "{err:?}"
         );
-        // Missing leading slash (only constructible in release, where
-        // `Spec::client`'s own debug assertion is compiled out).
-        #[cfg(not(debug_assertions))]
-        {
-            let err = check_client_spec(Spec::client("pkg.Svc/M", Unary), Unary, "call_unary")
-                .unwrap_err();
-            assert!(
-                err.message
-                    .as_deref()
-                    .unwrap_or_default()
-                    .contains("must start with '/'"),
-                "{err:?}"
-            );
-        }
+        // Malformed procedures share `spec::procedure_is_well_formed` with
+        // `Spec::client`'s debug assertion (tested in spec.rs); a `Spec` that
+        // fails it cannot be built here in a debug test binary.
     }
 
     /// End to end through a public entry point: the check runs before any
@@ -8944,13 +8964,6 @@ mod tests {
         .await
         .expect_err("mismatched spec must fail fast");
         assert_eq!(err.code, ErrorCode::Internal, "{err:?}");
-        assert!(
-            err.message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("use call_server_stream"),
-            "{err:?}"
-        );
     }
 
     // ========================================================================

@@ -56,14 +56,10 @@ pub const LOG_INGEST_SERVICE_INGEST_SPEC: ::connectrpc::Spec = ::connectrpc::Spe
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the client-side `Ingest` RPC.
-///
-/// The generated client passes this to the runtime, so it is the value a
-/// client-side interceptor observes. It differs from the server-side
-/// `LOG_INGEST_SERVICE_INGEST_SPEC` only in [`origin`](::connectrpc::Spec::origin),
-/// so the two are **not** `==`; use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method regardless of side.
+/// Client-side sibling of `LOG_INGEST_SERVICE_INGEST_SPEC` (same method,
+/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
+/// what generated client methods pass to the runtime and what a
+/// client-side interceptor observes.
 pub const LOG_INGEST_SERVICE_INGEST_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.noutf8.v1.LogIngestService/Ingest",
         ::connectrpc::StreamType::Unary,

@@ -995,23 +995,15 @@ assert_eq!(GREET_SERVICE_GREET_SPEC.origin, SpecOrigin::Server);
 
 Each method also gets a client-side sibling,
 `<SERVICE>_<METHOD>_CLIENT_SPEC`, identical except that its `origin` is
-`SpecOrigin::Client` (and gated with the client feature when
-`gate_client_feature` is on). Generated client methods pass it to the
-runtime, so this is the value a client-side interceptor observes. Because
-`Spec`'s `PartialEq` covers every field, the two siblings are **not**
-`==`; an interceptor that runs on both sides and asks "is this the
-`Greet` method?" should use `spec.same_method(&GREET_SERVICE_GREET_SPEC)`
-(or compare `procedure`), which ignores `origin`.
-
-The low-level `connectrpc::client::call_unary` / `call_unary_get` /
-`call_server_stream` / `call_client_stream` / `call_bidi_stream` entry
-points take a `Spec` for the same reason. A hand-written caller builds
-one with `Spec::client("/pkg.Service/Method", StreamType::…)`; the
-procedure is `&'static str`, so a caller whose method names arrive at
-runtime should intern each distinct procedure once (see the `Spec::client`
-rustdoc) rather than leak per call. Passing a spec of the wrong stream
-shape or origin to an entry point returns an `Internal` error before
-anything is sent.
+`SpecOrigin::Client`. Generated client methods pass it to the runtime, so
+this is the value a client-side interceptor observes. Because `Spec`'s
+`PartialEq` covers every field, the two siblings are **not** `==`; an
+interceptor that runs on both sides and asks "is this the `Greet` method?"
+should use `spec.same_method(&GREET_SERVICE_GREET_SPEC)` (or compare
+`procedure`), which ignores `origin`. The low-level
+`connectrpc::client::call_*` entry points take a `Spec` for the same
+reason; see the `call_unary` and `Spec::client` rustdoc for hand-written
+and dynamic callers.
 
 > **Both dispatch paths populate `ctx.spec()`.** A code-generated
 > `FooServiceServer<T>` always supplies a `Spec`. The dynamic `Router`

@@ -1302,18 +1302,26 @@ fn generate_all_message_encodable_impls(
 /// Generate code for a single service.
 /// Reject RPC method sets whose generated Rust identifiers collide.
 ///
-/// Each proto method `Foo` produces both `foo` and `foo_with_options` on the
-/// client. Two methods that normalize to the same snake_case name (e.g.
-/// `GetFoo` and `get_foo`), or one whose snake form equals another's
-/// `_with_options` form, would emit duplicate definitions and fail to
+/// Each proto method `Foo` produces `foo` and `foo_with_options` on the
+/// client and the module-scope constants `{SVC}_FOO_SPEC` /
+/// `{SVC}_FOO_CLIENT_SPEC`. Two methods that normalize to the same
+/// snake_case name (e.g. `GetFoo` and `get_foo`), or one whose snake form
+/// equals another's plus a generated suffix (`Get` + `GetWithOptions`;
+/// `Get` + `GetClient`, whose client and server `Spec` constants are both
+/// `{SVC}_GET_CLIENT_SPEC`), would emit duplicate definitions and fail to
 /// compile with an error pointing at generated code rather than the proto.
 fn check_method_collisions(service_name: &str, service: &ServiceDescriptorProto) -> Result<()> {
     let mut seen: HashMap<String, String> = HashMap::new();
     for m in &service.method {
         let proto_name = m.name.as_deref().unwrap_or("");
         let snake = proto_name.to_snake_case();
-        let with_opts = format!("{snake}_with_options");
-        for ident in [snake.as_str(), with_opts.as_str()] {
+        let idents = [
+            snake.clone(),
+            format!("{snake}_with_options"),
+            format!("{snake}_spec"),
+            format!("{snake}_client_spec"),
+        ];
+        for ident in &idents {
             if let Some(prev) = seen.get(ident) {
                 anyhow::bail!(
                     "service {service_name}: RPC methods {prev:?} and {proto_name:?} \
@@ -1321,8 +1329,9 @@ fn check_method_collisions(service_name: &str, service: &ServiceDescriptorProto)
                 );
             }
         }
-        seen.insert(snake, proto_name.to_string());
-        seen.insert(with_opts, proto_name.to_string());
+        for ident in idents {
+            seen.insert(ident, proto_name.to_string());
+        }
     }
     Ok(())
 }
@@ -1667,15 +1676,11 @@ methods (`msg.name()`) or `.view()`, or convert with `.to_owned_message()`."#
         TokenStream::new()
     };
 
-    // Per-method `Spec` constants. Stable, allocation-free metadata that the
-    // dispatcher threads into `RequestContext::spec` and that user code can
-    // reference directly (e.g. for tracing labels or routing tables). The
-    // client siblings are what generated client methods pass to `call_*`;
-    // they are gated with the client feature like every other client item.
-    check_module_const_collisions(service, &service_name_const)?;
-    let spec_consts = generate_spec_consts(&full_service_name, service);
-    let client_spec_consts =
-        generate_client_spec_consts(&full_service_name, service, &client_cfg_attr);
+    // Per-method `Spec` constants (server + client sibling). Stable,
+    // allocation-free metadata that the dispatcher threads into
+    // `RequestContext::spec`, that generated client methods pass to `call_*`,
+    // and that user code can reference directly.
+    let spec_consts = generate_spec_consts(&full_service_name, service, &client_cfg_attr);
 
     Ok(quote! {
         // -----------------------------------------------------------------------------
@@ -1686,8 +1691,6 @@ methods (`msg.name()`) or `.view()`, or convert with `.to_owned_message()`."#
         pub const #service_name_const: &str = #full_service_name;
 
         #(#spec_consts)*
-
-        #(#client_spec_consts)*
 
         #service_doc_tokens
         #[allow(clippy::type_complexity)]
@@ -1773,165 +1776,36 @@ methods (`msg.name()`) or `.view()`, or convert with `.to_owned_message()`."#
     })
 }
 
-/// Construct the identifier for a per-method server-side `Spec` constant.
-///
-/// The name is derived from the service and method names, e.g.
-/// `ELIZA_SERVICE_SAY_SPEC` for `ElizaService.Say`. Lives at module scope;
-/// the client sibling is [`method_client_spec_const_ident`].
+/// Construct the identifier for a per-method module-scope constant:
+/// `{SERVICE}_{METHOD}_{suffix}`, e.g. `ELIZA_SERVICE_SAY_SPEC` /
+/// `ELIZA_SERVICE_SAY_CLIENT_SPEC` for `ElizaService.Say`.
+fn method_const_ident(service: &ServiceDescriptorProto, method_name: &str, suffix: &str) -> Ident {
+    let service_name = service.name.as_deref().unwrap_or("");
+    format_ident!(
+        "{}_{}_{suffix}",
+        service_name.to_snake_case().to_uppercase(),
+        method_name.to_snake_case().to_uppercase()
+    )
+}
+
+/// `{SERVICE}_{METHOD}_SPEC`, the server-side constant.
 fn method_spec_const_ident(service: &ServiceDescriptorProto, method_name: &str) -> Ident {
-    let service_name = service.name.as_deref().unwrap_or("");
-    format_ident!(
-        "{}_{}_SPEC",
-        service_name.to_snake_case().to_uppercase(),
-        method_name.to_snake_case().to_uppercase()
-    )
+    method_const_ident(service, method_name, "SPEC")
 }
 
-/// Construct the identifier for a per-method client-side `Spec` constant,
-/// e.g. `ELIZA_SERVICE_SAY_CLIENT_SPEC` for `ElizaService.Say`.
+/// `{SERVICE}_{METHOD}_CLIENT_SPEC`, the client-side constant.
 fn method_client_spec_const_ident(service: &ServiceDescriptorProto, method_name: &str) -> Ident {
-    let service_name = service.name.as_deref().unwrap_or("");
-    format_ident!(
-        "{}_{}_CLIENT_SPEC",
-        service_name.to_snake_case().to_uppercase(),
-        method_name.to_snake_case().to_uppercase()
-    )
+    method_const_ident(service, method_name, "CLIENT_SPEC")
 }
 
-/// Fail generation when two module-scope constants of one service would get
-/// the same identifier.
-///
-/// The per-method constants are `{SVC}_{METHOD}_SPEC` (server) and
-/// `{SVC}_{METHOD}_CLIENT_SPEC` (client), next to `{SVC}_SERVICE_NAME`.
-/// Because method names are snake-cased and upper-cased, distinct proto
-/// methods can collapse to one identifier: `Get` + `GetClient` both yield
-/// `X_GET_CLIENT_SPEC`; `FooBar` + `Foo_Bar` both yield `X_FOO_BAR_SPEC`.
-/// Without this check the consumer crate fails with an E0428 that points at
-/// generated code, not at the proto. The error names both colliding items.
-fn check_module_const_collisions(
-    service: &ServiceDescriptorProto,
-    service_name_const: &Ident,
-) -> Result<()> {
-    let mut seen: HashMap<String, String> = HashMap::new();
-    seen.insert(
-        service_name_const.to_string(),
-        "the service-name constant".to_owned(),
-    );
-    for m in &service.method {
-        let method_name = m.name.as_deref().unwrap_or("");
-        for (ident, what) in [
-            (
-                method_spec_const_ident(service, method_name),
-                "server Spec constant",
-            ),
-            (
-                method_client_spec_const_ident(service, method_name),
-                "client Spec constant",
-            ),
-        ] {
-            let owner = format!("the {what} for method `{method_name}`");
-            if let Some(prev) = seen.insert(ident.to_string(), owner.clone()) {
-                anyhow::bail!(
-                    "service `{}`: generated constant `{ident}` would be emitted twice \
-                     ({prev}, and {owner}); rename one of the methods",
-                    service.name.as_deref().unwrap_or("")
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-/// The descriptor-derived arguments of a method's `Spec`, as tokens. Shared
-/// by the server and client constant emitters so the two can never disagree.
-struct MethodSpecParts {
-    /// `"/package.Service/Method"` literal.
-    procedure: String,
-    /// `::connectrpc::StreamType::…` path.
-    stream_type: TokenStream,
-    /// `::connectrpc::IdempotencyLevel::…` path.
-    idempotency_level: TokenStream,
-}
-
-fn method_spec_parts(full_service_name: &str, m: &MethodDescriptorProto) -> MethodSpecParts {
-    let method_name = m.name.as_deref().unwrap_or("");
-    let procedure = format!("/{full_service_name}/{method_name}");
-    let cs = m.client_streaming.unwrap_or(false);
-    let ss = m.server_streaming.unwrap_or(false);
-    let stream_type = match (cs, ss) {
-        (true, true) => quote! { ::connectrpc::StreamType::BidiStream },
-        (true, false) => quote! { ::connectrpc::StreamType::ClientStream },
-        (false, true) => quote! { ::connectrpc::StreamType::ServerStream },
-        (false, false) => quote! { ::connectrpc::StreamType::Unary },
-    };
-    let idempotency_level = match m.options.idempotency_level {
-        Some(IdempotencyLevel::NO_SIDE_EFFECTS) => {
-            quote! { ::connectrpc::IdempotencyLevel::NoSideEffects }
-        }
-        Some(IdempotencyLevel::IDEMPOTENT) => {
-            quote! { ::connectrpc::IdempotencyLevel::Idempotent }
-        }
-        _ => quote! { ::connectrpc::IdempotencyLevel::Unknown },
-    };
-    MethodSpecParts {
-        procedure,
-        stream_type,
-        idempotency_level,
-    }
-}
-
-/// Emit one server-side `pub const … : ::connectrpc::Spec` per method.
-///
-/// Each constant captures the method's procedure path, stream type, and
-/// idempotency level. Constructed via `Spec::server(...)` so
-/// `Spec::origin == SpecOrigin::Server`. Referenced by the generated
-/// `Dispatcher::lookup` impl and stable public API for user code. The
-/// client siblings come from [`generate_client_spec_consts`].
+/// Emit the per-method `pub const … : ::connectrpc::Spec` pair: the
+/// server-side `{SVC}_{METHOD}_SPEC` (`Spec::server`, referenced by the
+/// generated `Dispatcher::lookup`) and its client sibling
+/// `{SVC}_{METHOD}_CLIENT_SPEC` (`Spec::client`, passed by generated client
+/// methods to `::connectrpc::client::call_*` and carrying `client_cfg_attr`
+/// like every other client item). Both are built from the same descriptor
+/// facts in one place so they cannot disagree.
 fn generate_spec_consts(
-    full_service_name: &str,
-    service: &ServiceDescriptorProto,
-) -> Vec<TokenStream> {
-    service
-        .method
-        .iter()
-        .map(|m| {
-            let method_name = m.name.as_deref().unwrap_or("");
-            let spec_const = method_spec_const_ident(service, method_name);
-            let client_const = method_client_spec_const_ident(service, method_name);
-            let MethodSpecParts {
-                procedure,
-                stream_type,
-                idempotency_level,
-            } = method_spec_parts(full_service_name, m);
-            let doc = format!(
-                "Static [`Spec`](::connectrpc::Spec) for the server-side `{method_name}` RPC.\n\n\
-                 The dispatcher surfaces this on\n\
-                 [`RequestContext::spec`](::connectrpc::RequestContext::spec).\n\n\
-                 Client sibling: `{client_const}`. The two are not `==` (their\n\
-                 [`origin`](::connectrpc::Spec::origin) differs); use\n\
-                 [`Spec::same_method`](::connectrpc::Spec::same_method) or compare\n\
-                 `procedure` to match this method on either side."
-            );
-            let doc_tokens = doc_attrs(&doc);
-            quote! {
-                #doc_tokens
-                pub const #spec_const: ::connectrpc::Spec =
-                    ::connectrpc::Spec::server(#procedure, #stream_type)
-                        .with_idempotency_level(#idempotency_level);
-            }
-        })
-        .collect()
-}
-
-/// Emit one client-side `pub const … : ::connectrpc::Spec` per method.
-///
-/// Same descriptor facts as [`generate_spec_consts`], constructed via
-/// `Spec::client(...)` so `Spec::origin == SpecOrigin::Client`. Generated
-/// client methods pass these to `::connectrpc::client::call_*`; user code
-/// can compare against them in a client-side interceptor. Each constant
-/// carries `client_cfg_attr` (empty unless `gate_client_feature` is set),
-/// like every other client-side item.
-fn generate_client_spec_consts(
     full_service_name: &str,
     service: &ServiceDescriptorProto,
     client_cfg_attr: &TokenStream,
@@ -1941,27 +1815,50 @@ fn generate_client_spec_consts(
         .iter()
         .map(|m| {
             let method_name = m.name.as_deref().unwrap_or("");
-            let spec_const = method_client_spec_const_ident(service, method_name);
             let server_const = method_spec_const_ident(service, method_name);
-            let MethodSpecParts {
-                procedure,
-                stream_type,
-                idempotency_level,
-            } = method_spec_parts(full_service_name, m);
-            let doc = format!(
-                "Static [`Spec`](::connectrpc::Spec) for the client-side `{method_name}` RPC.\n\n\
-                 The generated client passes this to the runtime, so it is the value a\n\
-                 client-side interceptor observes. It differs from the server-side\n\
-                 `{server_const}` only in [`origin`](::connectrpc::Spec::origin),\n\
-                 so the two are **not** `==`; use\n\
+            let client_const = method_client_spec_const_ident(service, method_name);
+            let procedure = format!("/{full_service_name}/{method_name}");
+            let cs = m.client_streaming.unwrap_or(false);
+            let ss = m.server_streaming.unwrap_or(false);
+            let stream_type = match (cs, ss) {
+                (true, true) => quote! { ::connectrpc::StreamType::BidiStream },
+                (true, false) => quote! { ::connectrpc::StreamType::ClientStream },
+                (false, true) => quote! { ::connectrpc::StreamType::ServerStream },
+                (false, false) => quote! { ::connectrpc::StreamType::Unary },
+            };
+            let idempotency_level = match m.options.idempotency_level {
+                Some(IdempotencyLevel::NO_SIDE_EFFECTS) => {
+                    quote! { ::connectrpc::IdempotencyLevel::NoSideEffects }
+                }
+                Some(IdempotencyLevel::IDEMPOTENT) => {
+                    quote! { ::connectrpc::IdempotencyLevel::Idempotent }
+                }
+                _ => quote! { ::connectrpc::IdempotencyLevel::Unknown },
+            };
+            let server_doc = doc_attrs(&format!(
+                "Static [`Spec`](::connectrpc::Spec) for the server-side `{method_name}` RPC.\n\n\
+                 The dispatcher surfaces this on\n\
+                 [`RequestContext::spec`](::connectrpc::RequestContext::spec).\n\n\
+                 Client sibling: `{client_const}`. The two are not `==` (their\n\
+                 [`origin`](::connectrpc::Spec::origin) differs); use\n\
                  [`Spec::same_method`](::connectrpc::Spec::same_method) or compare\n\
-                 `procedure` to match this method regardless of side."
-            );
-            let doc_tokens = doc_attrs(&doc);
+                 `procedure` to match this method on either side."
+            ));
+            let client_doc = doc_attrs(&format!(
+                "Client-side sibling of `{server_const}` (same method,\n\
+                 [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):\n\
+                 what generated client methods pass to the runtime and what a\n\
+                 client-side interceptor observes."
+            ));
             quote! {
-                #doc_tokens
+                #server_doc
+                pub const #server_const: ::connectrpc::Spec =
+                    ::connectrpc::Spec::server(#procedure, #stream_type)
+                        .with_idempotency_level(#idempotency_level);
+
+                #client_doc
                 #client_cfg_attr
-                pub const #spec_const: ::connectrpc::Spec =
+                pub const #client_const: ::connectrpc::Spec =
                     ::connectrpc::Spec::client(#procedure, #stream_type)
                         .with_idempotency_level(#idempotency_level);
             }
@@ -2381,7 +2278,7 @@ fn generate_client_method(
 ) -> Result<TokenStream> {
     let method_name = method.name.as_deref().unwrap_or("");
     // The module-scope `*_CLIENT_SPEC` constant this method passes to the
-    // runtime (see `generate_client_spec_consts`).
+    // runtime (see `generate_spec_consts`).
     let spec_const = method_client_spec_const_ident(service, method_name);
     let method_snake = make_field_ident(&method_name.to_snake_case());
     let method_with_opts = format_ident!("{}_with_options", method_name.to_snake_case());
@@ -5082,8 +4979,9 @@ mod tests {
             "ECHO_SERVICE_SAY_SPEC"
         );
 
-        let consts = generate_spec_consts("pkg.EchoService", &service);
-        assert_eq!(consts.len(), 4, "one const per method");
+        let gate = quote! { #[cfg(feature = "client")] };
+        let consts = generate_spec_consts("pkg.EchoService", &service, &gate);
+        assert_eq!(consts.len(), 4, "one server+client pair per method");
 
         let render = |ts: &TokenStream| {
             let file = syn::parse2::<syn::File>(ts.clone()).expect("const should parse");
@@ -5094,6 +4992,30 @@ mod tests {
         assert!(say.contains(r#""/pkg.EchoService/Say""#), "{say}");
         assert!(say.contains("StreamType::Unary"), "{say}");
         assert!(say.contains("IdempotencyLevel::NoSideEffects"), "{say}");
+        // The client sibling rides in the same block: `_CLIENT_SPEC` name,
+        // `Spec::client`, and the gate attribute on the client item only.
+        assert_eq!(
+            method_client_spec_const_ident(&service, "Say").to_string(),
+            "ECHO_SERVICE_SAY_CLIENT_SPEC"
+        );
+        assert!(
+            say.contains("pub const ECHO_SERVICE_SAY_CLIENT_SPEC"),
+            "{say}"
+        );
+        assert!(say.contains("Spec::client("), "{say}");
+        assert_eq!(
+            say.matches("#[cfg(feature = \"client\")]").count(),
+            1,
+            "{say}"
+        );
+        let cfg_at = say.find("#[cfg(").unwrap();
+        assert!(
+            cfg_at > say.find("ECHO_SERVICE_SAY_SPEC").unwrap(),
+            "gate is on the client const: {say}"
+        );
+        let ungated =
+            render(&generate_spec_consts("pkg.EchoService", &service, &TokenStream::new())[0]);
+        assert!(!ungated.contains("#[cfg("), "{ungated}");
 
         let subscribe = render(&consts[1]);
         assert!(
@@ -5111,46 +5033,11 @@ mod tests {
 
         let chat = render(&consts[3]);
         assert!(chat.contains("StreamType::BidiStream"), "{chat}");
-
-        // Client siblings: same facts, `Spec::client`, `_CLIENT_SPEC` name,
-        // and the gate attribute passed in lands on the item itself.
-        assert_eq!(
-            method_client_spec_const_ident(&service, "Say").to_string(),
-            "ECHO_SERVICE_SAY_CLIENT_SPEC"
-        );
-        let gate = quote! { #[cfg(feature = "client")] };
-        let client_consts = generate_client_spec_consts("pkg.EchoService", &service, &gate);
-        assert_eq!(client_consts.len(), 4, "one client const per method");
-        let say = render(&client_consts[0]);
-        assert!(
-            say.contains("pub const ECHO_SERVICE_SAY_CLIENT_SPEC"),
-            "{say}"
-        );
-        assert!(say.contains("Spec::client("), "{say}");
-        assert!(say.contains(r#""/pkg.EchoService/Say""#), "{say}");
-        assert!(say.contains("StreamType::Unary"), "{say}");
-        assert!(say.contains("IdempotencyLevel::NoSideEffects"), "{say}");
-        assert!(say.contains("#[cfg(feature = \"client\")]"), "{say}");
-        let subscribe = render(&client_consts[1]);
-        assert!(
-            subscribe.contains("StreamType::ServerStream"),
-            "{subscribe}"
-        );
-        assert!(
-            subscribe.contains("IdempotencyLevel::Idempotent"),
-            "{subscribe}"
-        );
-        assert!(render(&client_consts[2]).contains("StreamType::ClientStream"));
-        assert!(render(&client_consts[3]).contains("StreamType::BidiStream"));
-        // Ungated emission carries no cfg attr.
-        let ungated = generate_client_spec_consts("pkg.EchoService", &service, &TokenStream::new());
-        assert!(!render(&ungated[0]).contains("#[cfg("));
     }
 
-    /// Two proto methods whose generated constant identifiers coincide
-    /// (`Get`'s client const and `GetClient`'s server const are both
-    /// `X_GET_CLIENT_SPEC`) fail generation with an error naming both,
-    /// instead of emitting a module the consumer cannot compile.
+    /// `Get` + `GetClient` would both produce `X_GET_CLIENT_SPEC` (one's
+    /// client const, the other's server const); generation fails naming
+    /// both methods instead of emitting a module the consumer cannot compile.
     #[test]
     fn colliding_spec_const_names_are_rejected() {
         let m = |name: &str| MethodDescriptorProto {
@@ -5164,31 +5051,22 @@ mod tests {
             method: vec![m("Get"), m("GetClient")],
             ..Default::default()
         };
-        let err = check_module_const_collisions(&service, &format_ident!("X_SERVICE_NAME"))
-            .expect_err("Get + GetClient collide on X_GET_CLIENT_SPEC");
-        let msg = err.to_string();
-        assert!(msg.contains("X_GET_CLIENT_SPEC"), "{msg}");
+        let msg = check_method_collisions("X", &service)
+            .expect_err("Get + GetClient collide on get_client_spec")
+            .to_string();
+        assert!(msg.contains("get_client_spec"), "{msg}");
         assert!(
-            msg.contains("`Get`") && msg.contains("`GetClient`"),
+            msg.contains("\"Get\"") && msg.contains("\"GetClient\""),
             "{msg}"
         );
 
-        // The pre-existing server-only hazard is covered too: distinct proto
-        // names that snake/upper-case to one identifier.
-        let service = ServiceDescriptorProto {
-            name: Some("X".into()),
-            method: vec![m("FooBar"), m("Foo_Bar")],
-            ..Default::default()
-        };
-        assert!(check_module_const_collisions(&service, &format_ident!("X_SERVICE_NAME")).is_err());
-
-        // And the ordinary case passes.
+        // The ordinary case, including a method literally named `Client`, passes.
         let service = ServiceDescriptorProto {
             name: Some("X".into()),
             method: vec![m("Get"), m("Put"), m("Client")],
             ..Default::default()
         };
-        check_module_const_collisions(&service, &format_ident!("X_SERVICE_NAME")).unwrap();
+        check_method_collisions("X", &service).unwrap();
     }
 
     /// Generated client methods identify the RPC to the runtime by the
