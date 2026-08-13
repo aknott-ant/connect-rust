@@ -264,22 +264,19 @@ impl std::fmt::Debug for InterceptorChain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // `dyn Interceptor` is not `Debug`; the count is what a reader of a
         // config/service dump actually wants.
-        f.debug_struct("InterceptorChain")
-            .field("len", &self.0.len())
-            .finish()
+        write!(f, "[dyn Interceptor; {}]", self.0.len())
     }
 }
 
 /// The continuation an [`Interceptor`] calls to run the rest of the chain.
 ///
 /// `Next` holds the still-to-run interceptors and the terminal handler.
-/// [`run`](Next::run) consumes it, so the common case — call it once —
-/// needs no ceremony, and not calling it at all short-circuits the chain.
+/// [`run`](Next::run) consumes it; not calling it short-circuits the chain.
 ///
-/// `Next` is also `Clone` (it is two shared references), for the
-/// interceptor that must run the rest of the chain more than once: a
-/// retry or a hedge. Clone *before* the first `run` and build each extra
-/// attempt's request with [`UnaryRequest::try_clone`]:
+/// `Next` is also `Clone` (two shared references) for the interceptor that
+/// must run the rest of the chain more than once — a retry or a hedge.
+/// Clone before the first `run` and copy the request with
+/// [`UnaryRequest::try_clone`]:
 ///
 /// ```rust,ignore
 /// let spare = req.try_clone()?;            // ctx clone + Payload::try_clone
@@ -308,11 +305,8 @@ impl<'a> Next<'a> {
     }
 
     /// Run the rest of the chain — the next interceptor if any, otherwise
-    /// the terminal handler — and return its response.
-    ///
-    /// Consumes `self`. To run the chain again (retry), call
-    /// `next.clone().run(..)` for the earlier attempts; each run re-invokes
-    /// everything below, including the handler on the server.
+    /// the terminal handler — and return its response. Consumes `self`;
+    /// see [`Next`] for re-running.
     ///
     /// # Errors
     ///
@@ -394,30 +388,19 @@ impl UnaryRequest {
         Self { ctx, payload }
     }
 
-    /// Build a `UnaryRequest` from a context and an existing [`Payload`].
-    ///
-    /// The struct is `#[non_exhaustive]`, so downstream code cannot use a
-    /// struct literal; this is the constructor for an interceptor that
-    /// assembles a request itself, e.g. around a typed message with
-    /// [`Payload::from_message`]. (For a retry copy, prefer
-    /// [`try_clone`](Self::try_clone).)
-    ///
-    /// Unlike [`new`](Self::new), the payload keeps **its own** decode
-    /// options rather than taking the context's. When wrapping untrusted
-    /// wire bytes on the server, carry the service limits across
-    /// explicitly:
-    /// `Payload::new(bytes, fmt).with_decode_options(ctx.decode_options().clone())`.
+    /// Build a `UnaryRequest` from a context and an existing [`Payload`]
+    /// (the struct is `#[non_exhaustive]`, so downstream code cannot use a
+    /// struct literal) — e.g. around a typed message with
+    /// [`Payload::from_message`]. Unlike [`new`](Self::new), does not apply
+    /// the context's decode limits to the payload; use `new` for untrusted
+    /// wire bytes. For a retry copy, use [`try_clone`](Self::try_clone).
     pub fn from_parts(ctx: RequestContext, payload: Payload) -> Self {
         Self { ctx, payload }
     }
 
-    /// Copy this request for another trip through the chain.
-    ///
-    /// Clones the context (headers, extensions, deadline, spec) and
-    /// [`Payload::try_clone`]s the body. This is the one call a retry or
-    /// hedging interceptor makes before its first `next.clone().run(req)`;
-    /// see [`Next`] for the full shape. The copies are independent:
-    /// header edits on one attempt do not leak into another.
+    /// Copy this request for another trip through the chain: clones the
+    /// context and [`Payload::try_clone`]s the body, so header edits on one
+    /// attempt do not leak into another. See [`Next`] for the retry shape.
     ///
     /// # Errors
     ///
@@ -608,12 +591,8 @@ where
 /// streaming chain.
 ///
 /// `NextStream` holds the still-to-run interceptors and the terminal
-/// handler. [`run`](NextStream::run) consumes it. Not calling it
-/// short-circuits. It is `Clone` for symmetry with [`Next`], but
-/// re-running a streaming chain is rarely practical: `run` consumes the
-/// inbound [`PayloadStream`], which cannot be cloned, so a second attempt
-/// needs an inbound stream you buffered or synthesized yourself.
-#[derive(Clone)]
+/// handler. [`run`](NextStream::run) consumes it: an interceptor can call
+/// `next.run(req, inbound)` at most once. Not calling it short-circuits.
 pub struct NextStream<'a> {
     rest: &'a [Arc<dyn Interceptor>],
     terminal: &'a (dyn StreamTerminal + 'a),
@@ -1432,16 +1411,18 @@ mod tests {
         assert_eq!(echoed.value, "hi", "retry carried the original body");
     }
 
+    /// An interceptor that overrides nothing: both hooks pass through.
+    struct Passthrough;
+    #[async_trait::async_trait]
+    impl Interceptor for Passthrough {}
+
     #[test]
     fn interceptor_chain_push_and_debug() {
-        struct Nop;
-        #[async_trait::async_trait]
-        impl Interceptor for Nop {}
         let mut chain = InterceptorChain::default();
         assert!(chain.is_empty());
         let shared = chain.clone();
-        let a: Arc<dyn Interceptor> = Arc::new(Nop);
-        let b: Arc<dyn Interceptor> = Arc::new(Nop);
+        let a: Arc<dyn Interceptor> = Arc::new(Passthrough);
+        let b: Arc<dyn Interceptor> = Arc::new(Passthrough);
         chain.push(Arc::clone(&a));
         chain.push(Arc::clone(&b));
         // Deref to slice; `push` appends, so first registered stays
@@ -1452,7 +1433,7 @@ mod tests {
         // `push` rebuilds; an earlier clone is unaffected (registration on
         // one handle must not retroactively change another).
         assert!(shared.is_empty());
-        assert!(format!("{chain:?}").contains("len: 2"), "{chain:?}");
+        assert_eq!(format!("{chain:?}"), "[dyn Interceptor; 2]");
     }
 
     /// `new` stamps the context's decode options onto the payload;
@@ -1484,9 +1465,6 @@ mod tests {
     /// metadata, not just the body.
     #[tokio::test]
     async fn passthrough_chain_preserves_response_metadata() {
-        struct Passthrough;
-        #[async_trait::async_trait]
-        impl Interceptor for Passthrough {}
         let chain: Vec<Arc<dyn Interceptor>> = vec![Arc::new(Passthrough)];
         let resp = run_chain(&chain, req(), |_| async {
             let mut r = EncodedResponse::new(Bytes::from_static(b"x").into());
@@ -1838,9 +1816,6 @@ mod tests {
 
     #[tokio::test]
     async fn streaming_passthrough_preserves_items_and_metadata() {
-        struct Passthrough;
-        #[async_trait::async_trait]
-        impl Interceptor for Passthrough {}
         let chain: Vec<Arc<dyn Interceptor>> = vec![Arc::new(Passthrough)];
         let resp = run_chain_streaming(
             &chain,
@@ -2232,9 +2207,6 @@ mod tests {
     /// collapses a 1-item outbound stream — through a passthrough chain.
     #[tokio::test]
     async fn streaming_intercepted_un_unifies_through_passthrough_chain() {
-        struct Passthrough;
-        #[async_trait::async_trait]
-        impl Interceptor for Passthrough {}
         let chain: Vec<Arc<dyn Interceptor>> = vec![Arc::new(Passthrough)];
 
         // Server-streaming: single body in → 1-item inbound stream → terminal

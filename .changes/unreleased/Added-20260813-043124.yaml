@@ -21,8 +21,8 @@ body: |-
   - **`UnaryRequest::from_parts(ctx, payload)`** — constructor for the
     `#[non_exhaustive]` request from an existing `Payload`; `StreamRequest`
     is now `Clone`.
-  - **`Next` and `NextStream` are now `Clone`**, so an interceptor can run
-    the rest of the chain more than once (`next.clone().run(first)` then
+  - **`Next` is now `Clone`**, so a unary interceptor can run the rest of
+    the chain more than once (`next.clone().run(first)` then
     `next.run(second)`); the consuming `run(self)` keeps the single-call
     case explicit.
 time: 2026-08-13T04:31:36.268465697Z

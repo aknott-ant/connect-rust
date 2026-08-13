@@ -128,20 +128,34 @@ where
 ///
 /// `Payload` is intentionally not `Clone`: a clone would either drop the
 /// decode cache (surprising) or duplicate it (defeating the laziness).
-/// Pass it by reference, or move it through the call chain. When a
-/// second body is genuinely needed (a retry interceptor), call
-/// [`try_clone`](Payload::try_clone), which is explicit about copying
-/// the encoded bytes and starting with an empty cache.
+/// Pass it by reference, or move it through the call chain; when a
+/// second body is genuinely needed, [`try_clone`](Payload::try_clone) is
+/// the explicit copy.
 pub struct Payload {
     bytes: Bytes,
     format: CodecFormat,
     decoded: OnceLock<Box<dyn AnyMessage>>,
-    replaced: Option<Box<dyn AnyMessage>>,
-    /// Memoized `replaced.encode(format)`, so `encoded()` / `try_clone()`
-    /// on a replaced or `from_message` payload encode at most once. Reset
-    /// by `set_message`. Unused while `replaced` is `None`.
-    replaced_encoded: OnceLock<Bytes>,
+    /// Boxed so a payload without a replacement (the server fast path)
+    /// carries one pointer, not the message box plus its encode memo.
+    replaced: Option<Box<Replacement>>,
     decode_options: buffa::DecodeOptions,
+}
+
+/// A message set by [`Payload::set_message`] / [`Payload::from_message`],
+/// with its wire encoding memoized on first [`Payload::encoded`]. A new
+/// replacement is a new `Replacement`, so the memo can never be stale.
+struct Replacement {
+    message: Box<dyn AnyMessage>,
+    encoded: OnceLock<Bytes>,
+}
+
+impl Replacement {
+    fn new(message: impl AnyMessage) -> Box<Self> {
+        Box::new(Self {
+            message: Box::new(message),
+            encoded: OnceLock::new(),
+        })
+    }
 }
 
 impl Payload {
@@ -153,7 +167,6 @@ impl Payload {
             format,
             decoded: OnceLock::new(),
             replaced: None,
-            replaced_encoded: OnceLock::new(),
             decode_options: buffa::DecodeOptions::new(),
         }
     }
@@ -178,22 +191,14 @@ impl Payload {
     /// Short-circuit example (a cache hit, a test double):
     /// `Ok(Response::new(Payload::from_message(reply, req.payload.format())))`.
     pub fn from_message<M: AnyMessage>(message: M, format: CodecFormat) -> Self {
-        Self {
-            bytes: Bytes::new(),
-            format,
-            decoded: OnceLock::new(),
-            replaced: Some(Box::new(message)),
-            replaced_encoded: OnceLock::new(),
-            decode_options: buffa::DecodeOptions::new(),
-        }
+        let mut payload = Self::new(Bytes::new(), format);
+        payload.replaced = Some(Replacement::new(message));
+        payload
     }
 
-    /// Produce an independent `Payload` carrying the same body.
-    ///
-    /// `Payload` is deliberately not `Clone` (see the type docs). This is
-    /// the explicit escape hatch for an interceptor that runs the rest of
-    /// the chain more than once — retry, hedging — and therefore needs a
-    /// second request body (see also
+    /// Produce an independent `Payload` carrying the same body — the
+    /// explicit copy for an interceptor that runs the rest of the chain
+    /// more than once (see
     /// [`UnaryRequest::try_clone`](crate::interceptor::UnaryRequest::try_clone)).
     /// The copy holds this payload's [`encoded`](Payload::encoded) bytes
     /// (a refcount bump; a replacement is encoded once and memoized on
@@ -211,14 +216,10 @@ impl Payload {
     ///
     /// Returns an error if encoding a replacement fails.
     pub fn try_clone(&self) -> Result<Self, ConnectError> {
-        Ok(Self {
-            bytes: self.encoded()?,
-            format: self.format,
-            decoded: OnceLock::new(),
-            replaced: None,
-            replaced_encoded: OnceLock::new(),
-            decode_options: self.decode_options.clone(),
-        })
+        Ok(
+            Self::new(self.encoded()?, self.format)
+                .with_decode_options(self.decode_options.clone()),
+        )
     }
 
     /// Attach the decode limits a typed accessor should honour.
@@ -277,6 +278,7 @@ impl Payload {
         M: Message + JsonSerialize + JsonDeserialize + 'static,
     {
         if let Some(replaced) = &self.replaced {
+            let replaced = &replaced.message;
             return replaced.as_any().downcast_ref::<M>().ok_or_else(|| {
                 ConnectError::internal(format!(
                     "payload replacement is a {}, not a {}",
@@ -351,6 +353,7 @@ impl Payload {
         M: Message + JsonDeserialize + 'static,
     {
         if let Some(replaced) = self.replaced {
+            let replaced = replaced.message;
             let type_name = replaced.type_name();
             return replaced
                 .into_any()
@@ -425,7 +428,7 @@ impl Payload {
             // payload's replacement needs a separate proto encode.
             let bytes = match self.format {
                 CodecFormat::Proto => self.encoded()?,
-                CodecFormat::Json => replaced.encode(CodecFormat::Proto)?,
+                CodecFormat::Json => replaced.message.encode(CodecFormat::Proto)?,
             };
             return OwnedView::decode(bytes).map_err(|e| {
                 ConnectError::internal(format!("failed to decode replacement as view: {e}"))
@@ -450,19 +453,12 @@ impl Payload {
     where
         M: AnyMessage,
     {
-        self.replaced = Some(Box::new(message));
-        // A memoized encode of the *previous* replacement must not be
-        // served for the new one.
-        if self.replaced_encoded.get().is_some() {
-            self.replaced_encoded = OnceLock::new();
-        }
+        self.replaced = Some(Replacement::new(message));
         // Drop the prior decode cache so the original message doesn't pin
         // memory for the Payload's lifetime. `replaced` is checked first,
         // so a stale cache would never be visible — this is purely a
         // memory concern.
-        if self.decoded.get().is_some() {
-            self.decoded = OnceLock::new();
-        }
+        self.decoded.take();
     }
 
     /// The wire bytes the dispatch path should actually send.
@@ -483,11 +479,11 @@ impl Payload {
         // Probe-then-set, as in `message()`: `get_or_try_init` is
         // unstable. Two racing callers both encode; one `set` wins and
         // both return equal bytes.
-        if let Some(cached) = self.replaced_encoded.get() {
+        if let Some(cached) = replaced.encoded.get() {
             return Ok(cached.clone());
         }
-        let bytes = replaced.encode(self.format)?;
-        let _ = self.replaced_encoded.set(bytes.clone());
+        let bytes = replaced.message.encode(self.format)?;
+        let _ = replaced.encoded.set(bytes.clone());
         Ok(bytes)
     }
 }
@@ -632,13 +628,7 @@ mod tests {
     /// typed access is a downcast, `encoded()` produces the wire form.
     #[test]
     fn from_message_is_lazily_encoded() {
-        let p = Payload::from_message(
-            StringValue {
-                value: "typed".into(),
-                ..Default::default()
-            },
-            CodecFormat::Proto,
-        );
+        let p = Payload::from_message(StringValue::from("typed"), CodecFormat::Proto);
         // The documented trap: `bytes()` is what was *received* (nothing);
         // `encoded()` is what will be *sent*.
         assert!(
@@ -675,26 +665,14 @@ mod tests {
     #[cfg(feature = "json")]
     #[test]
     fn from_message_encodes_in_requested_format() {
-        let p = Payload::from_message(
-            StringValue {
-                value: "j".into(),
-                ..Default::default()
-            },
-            CodecFormat::Json,
-        );
+        let p = Payload::from_message(StringValue::from("j"), CodecFormat::Json);
         let rt: StringValue = decode_json(&p.encoded().unwrap()).unwrap();
         assert_eq!(rt.value, "j");
     }
 
     #[test]
     fn from_message_wrong_type_is_internal_error() {
-        let p = Payload::from_message(
-            StringValue {
-                value: "s".into(),
-                ..Default::default()
-            },
-            CodecFormat::Proto,
-        );
+        let p = Payload::from_message(StringValue::from("s"), CodecFormat::Proto);
         let err = p
             .message::<buffa_types::google::protobuf::Int64Value>()
             .unwrap_err();
@@ -720,26 +698,11 @@ mod tests {
         assert_eq!(c.message::<StringValue>().unwrap().value, "orig");
 
         let mut replaced = proto_payload("orig");
-        replaced.set_message(StringValue {
-            value: "new".into(),
-            ..Default::default()
-        });
+        replaced.set_message(StringValue::from("new"));
         let c = replaced.try_clone().unwrap();
         assert!(c.replaced.is_none(), "replacement is baked into bytes");
         let rt: StringValue = crate::codec::decode_proto(c.bytes()).unwrap();
         assert_eq!(rt.value, "new");
-
-        // And from a lazily-encoded payload: the clone carries real bytes.
-        let lazy = Payload::from_message(
-            StringValue {
-                value: "lazy".into(),
-                ..Default::default()
-            },
-            CodecFormat::Proto,
-        );
-        let c = lazy.try_clone().unwrap();
-        assert!(!c.bytes().is_empty());
-        assert_eq!(c.message::<StringValue>().unwrap().value, "lazy");
     }
 
     /// A replacement (or `from_message` body) is encoded at most once:
@@ -747,13 +710,7 @@ mod tests {
     /// and `set_message` invalidates it.
     #[test]
     fn replacement_encode_is_memoized_and_invalidated() {
-        let mut p = Payload::from_message(
-            StringValue {
-                value: "once".into(),
-                ..Default::default()
-            },
-            CodecFormat::Proto,
-        );
+        let mut p = Payload::from_message(StringValue::from("once"), CodecFormat::Proto);
         let first = p.encoded().unwrap();
         let again = p.encoded().unwrap();
         assert!(
@@ -774,10 +731,7 @@ mod tests {
             "view should borrow the memoized bytes"
         );
 
-        p.set_message(StringValue {
-            value: "twice".into(),
-            ..Default::default()
-        });
+        p.set_message(StringValue::from("twice"));
         let rt: StringValue = crate::codec::decode_proto(&p.encoded().unwrap()).unwrap();
         assert_eq!(rt.value, "twice", "set_message must invalidate the memo");
     }
@@ -805,17 +759,10 @@ mod tests {
     #[test]
     fn try_clone_json_replacement_is_wire_equal_not_api_equal() {
         let mut p = Payload::new(
-            encode_json(&StringValue {
-                value: "before".into(),
-                ..Default::default()
-            })
-            .unwrap(),
+            encode_json(&StringValue::from("before")).unwrap(),
             CodecFormat::Json,
         );
-        p.set_message(StringValue {
-            value: "after".into(),
-            ..Default::default()
-        });
+        p.set_message(StringValue::from("after"));
         assert!(
             p.view::<StringValueView>().is_ok(),
             "original: replacement can be viewed"
@@ -902,16 +849,9 @@ mod tests {
     fn view_replaced_json_format_payload() {
         // A replacement is always re-encoded to proto for view(), so a
         // JSON-format payload with a replacement still views successfully.
-        let bytes = encode_json(&StringValue {
-            value: "before".into(),
-            ..Default::default()
-        })
-        .unwrap();
+        let bytes = encode_json(&StringValue::from("before")).unwrap();
         let mut p = Payload::new(bytes, CodecFormat::Json);
-        p.set_message(StringValue {
-            value: "after".into(),
-            ..Default::default()
-        });
+        p.set_message(StringValue::from("after"));
         let v = p.view::<StringValueView>().unwrap();
         assert_eq!(v.reborrow().value, "after");
     }
@@ -919,14 +859,8 @@ mod tests {
     #[test]
     fn set_message_twice_supersedes() {
         let mut p = proto_payload("original");
-        p.set_message(StringValue {
-            value: "first".into(),
-            ..Default::default()
-        });
-        p.set_message(StringValue {
-            value: "second".into(),
-            ..Default::default()
-        });
+        p.set_message(StringValue::from("first"));
+        p.set_message(StringValue::from("second"));
         let m: &StringValue = p.message().unwrap();
         assert_eq!(m.value, "second");
     }
@@ -960,10 +894,7 @@ mod tests {
         // proto. If `take_message` decoded the bytes instead of moving
         // the replacement out, this would error.
         let mut p = Payload::new(Bytes::from_static(&[0xff, 0xff, 0xff]), CodecFormat::Proto);
-        p.set_message(StringValue {
-            value: "replaced".into(),
-            ..Default::default()
-        });
+        p.set_message(StringValue::from("replaced"));
         let m: StringValue = p.take_message().unwrap();
         assert_eq!(m.value, "replaced");
     }

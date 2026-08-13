@@ -160,14 +160,9 @@ impl RequestContext {
     /// negotiated compression) were resolved from the headers *before*
     /// interceptors ran; rewriting `connect-timeout-ms`, `grpc-timeout`,
     /// `content-type`, or `accept-encoding` here changes only what
-    /// downstream code reads, not dispatch behavior.
-    ///
-    /// # Note
-    ///
-    /// The same by-value caveat as [`extensions_mut`](Self::extensions_mut)
-    /// applies: a *handler* mutating its own `ctx` affects nothing
-    /// downstream. This accessor is for code that still holds the context
-    /// before dispatch continues.
+    /// downstream code reads, not dispatch behavior. As with
+    /// [`extensions_mut`](Self::extensions_mut), a *handler* mutating its
+    /// own by-value `ctx` affects nothing downstream.
     pub fn headers_mut(&mut self) -> &mut HeaderMap {
         &mut self.headers
     }
