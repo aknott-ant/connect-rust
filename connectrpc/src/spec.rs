@@ -215,14 +215,28 @@ impl Spec {
         self
     }
 
-    /// Whether `self` and `other` describe the same RPC method, ignoring
-    /// which side ([`origin`](Spec::origin)) produced them.
+    /// Set which side this `Spec` describes. Returns `self` for chaining in
+    /// `const` position.
     ///
-    /// `Spec` derives `PartialEq` over *all* fields, so the generated
-    /// server constant `FOO_SERVICE_BAR_SPEC` and its client sibling
-    /// `FOO_SERVICE_BAR_CLIENT_SPEC` are **not** `==`. Use this (or compare
-    /// [`procedure`](Spec::procedure) directly) when an interceptor that
-    /// runs on both sides asks "is this the `Bar` method?".
+    /// Code generation emits one constant per method (`FOO_SERVICE_BAR_SPEC`,
+    /// [`SpecOrigin::Server`]); the generated client passes
+    /// `FOO_SERVICE_BAR_SPEC.with_origin(SpecOrigin::Client)` to the runtime,
+    /// so a client-side interceptor observes the same method facts with
+    /// [`origin`](Spec::origin) flipped.
+    #[must_use]
+    pub const fn with_origin(mut self, origin: SpecOrigin) -> Self {
+        self.origin = origin;
+        self
+    }
+
+    /// Whether `self` and `other` describe the same RPC method, ignoring
+    /// which side ([`origin`](Spec::origin)) they describe.
+    ///
+    /// `Spec` derives `PartialEq` over *all* fields, so the value a client
+    /// interceptor sees (origin `Client`) is **not** `==` to the generated
+    /// `FOO_SERVICE_BAR_SPEC` constant (origin `Server`). Use this (or
+    /// compare [`procedure`](Spec::procedure) directly) when asking "is this
+    /// the `Bar` method?" regardless of side.
     #[must_use]
     pub fn same_method(&self, other: &Spec) -> bool {
         self.procedure == other.procedure
@@ -331,15 +345,19 @@ mod tests {
         assert!(!procedure_is_well_formed("/"));
     }
 
-    /// The generated server/client siblings for one method are not `==`
-    /// (origin differs) but are `same_method`; different methods are not.
+    /// A constant and its `with_origin(Client)` form are not `==` (origin
+    /// differs) but are `same_method`; different methods are not.
     #[test]
     fn same_method_ignores_origin() {
         const SERVER: Spec = Spec::server("/pkg.Greet/Say", StreamType::Unary)
             .with_idempotency_level(IdempotencyLevel::NoSideEffects);
-        const CLIENT: Spec = Spec::client("/pkg.Greet/Say", StreamType::Unary)
-            .with_idempotency_level(IdempotencyLevel::NoSideEffects);
+        const CLIENT: Spec = SERVER.with_origin(SpecOrigin::Client);
         const OTHER: Spec = Spec::client("/pkg.Greet/Shout", StreamType::Unary);
+        assert_eq!(
+            CLIENT,
+            Spec::client("/pkg.Greet/Say", StreamType::Unary)
+                .with_idempotency_level(IdempotencyLevel::NoSideEffects)
+        );
         assert_ne!(SERVER, CLIENT, "PartialEq includes origin");
         assert!(SERVER.same_method(&CLIENT));
         assert!(CLIENT.same_method(&SERVER));

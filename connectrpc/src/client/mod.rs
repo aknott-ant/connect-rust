@@ -1509,7 +1509,7 @@ fn entry_point_for(stream_type: StreamType) -> &'static str {
 
 /// Validate a caller-supplied [`Spec`] against the entry point it reached.
 ///
-/// Generated clients always pass a matching `*_CLIENT_SPEC`; these checks
+/// Generated clients always pass a matching client-origin spec; these checks
 /// exist for hand-written callers, where the mistakes below would otherwise
 /// surface far from their cause (a protocol error from the server, a client
 /// interceptor observing `SpecOrigin::Server`, a mangled request URI). All
@@ -1529,8 +1529,8 @@ fn check_client_spec(
     }
     if spec.origin != SpecOrigin::Client {
         return Err(ConnectError::internal(format!(
-            "{entry_point} called with a server-side Spec for {}; pass the generated \
-             *_CLIENT_SPEC constant or Spec::client(..)",
+            "{entry_point} called with a server-side Spec for {}; pass \
+             FOO_SPEC.with_origin(SpecOrigin::Client) or Spec::client(..)",
             spec.procedure,
         )));
     }
@@ -1805,8 +1805,11 @@ where
 /// This is the core function used by generated clients to make RPC calls.
 /// It handles encoding, compression, and protocol details.
 ///
-/// `spec` identifies the method. Generated clients pass their per-method
-/// `*_CLIENT_SPEC` constant; a hand-written caller builds one with
+/// `spec` identifies the method and must have
+/// [`SpecOrigin::Client`]. Generated clients pass
+/// their per-method `*_SPEC` constant with
+/// [`.with_origin(SpecOrigin::Client)`](Spec::with_origin); a hand-written
+/// caller does the same, or builds one with
 /// [`Spec::client("/pkg.Service/Method", StreamType::Unary)`](Spec::client),
 /// chaining [`with_idempotency_level`](Spec::with_idempotency_level) when
 /// known (see [`Spec::client`] for callers whose method names are only
@@ -2768,7 +2771,7 @@ enum BodyPoll {
 /// # Example
 ///
 /// ```rust,ignore
-/// let mut stream = call_server_stream(&transport, &config, SVC_METHOD_CLIENT_SPEC, req, CallOptions::default()).await?;
+/// let mut stream = call_server_stream(&transport, &config, SVC_METHOD_SPEC.with_origin(SpecOrigin::Client), req, CallOptions::default()).await?;
 /// println!("headers: {:?}", stream.headers());
 /// while let Some(msg) = stream.message().await? {
 ///     println!("got message: {:?}", msg);
@@ -3619,7 +3622,7 @@ enum RecvState<B, RespView> {
 /// # Example
 ///
 /// ```rust,ignore
-/// let mut stream = call_bidi_stream(&transport, &config, SVC_METHOD_CLIENT_SPEC, CallOptions::default()).await?;
+/// let mut stream = call_bidi_stream(&transport, &config, SVC_METHOD_SPEC.with_origin(SpecOrigin::Client), CallOptions::default()).await?;
 /// stream.send(request1).await?;
 /// stream.send(request2).await?;
 /// stream.close_send();
@@ -4080,7 +4083,7 @@ where
 ///
 /// ```rust,ignore
 /// let mut stream = call_bidi_stream::<_, MyReq, MyRespView>(
-///     &transport, &config, MY_SERVICE_METHOD_CLIENT_SPEC, CallOptions::default(),
+///     &transport, &config, MY_SERVICE_METHOD_SPEC.with_origin(SpecOrigin::Client), CallOptions::default(),
 /// ).await?;
 /// stream.send(req).await?;
 /// stream.close_send();
@@ -4198,7 +4201,7 @@ where
 ///
 /// ```rust,ignore
 /// let resp = call_client_stream(
-///     &transport, &config, SVC_METHOD_CLIENT_SPEC,
+///     &transport, &config, SVC_METHOD_SPEC.with_origin(SpecOrigin::Client),
 ///     connectrpc::stream_iter(vec![req1, req2]),
 ///     CallOptions::default(),
 /// ).await?;

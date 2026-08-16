@@ -21,7 +21,7 @@ use connectrpc::client::{
 use connectrpc::error::{ConnectError, ErrorCode};
 use connectrpc::rustls;
 use connectrpc::{
-    CodecFormat, CompressionRegistry, Spec,
+    CodecFormat, CompressionRegistry, Spec, SpecOrigin,
     compression::{GzipProvider, ZstdProvider},
 };
 use connectrpc_conformance::ClientCompatRequest;
@@ -40,10 +40,9 @@ use connectrpc_conformance::{
     ServerStreamResponseView, UnaryResponseView,
 };
 use connectrpc_conformance::{
-    CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC, CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC,
-    CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC,
-    CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC, CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC,
-    CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC,
+    CONFORMANCE_SERVICE_BIDI_STREAM_SPEC, CONFORMANCE_SERVICE_CLIENT_STREAM_SPEC,
+    CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_SPEC, CONFORMANCE_SERVICE_SERVER_STREAM_SPEC,
+    CONFORMANCE_SERVICE_UNARY_SPEC, CONFORMANCE_SERVICE_UNIMPLEMENTED_SPEC,
 };
 use hyper::Request;
 use hyper::Response;
@@ -528,7 +527,7 @@ async fn do_unary_call(
 
     // Macro: picks call_unary or call_unary_get based on use_get. Avoids
     // duplicating the three match arms for the GET/POST choice. Each arm
-    // passes the generated `*_CLIENT_SPEC` for its method.
+    // passes the generated `*_SPEC` for its method, as a client.
     macro_rules! do_call {
         ($spec:expr, $req_ty:ty, $resp_view:ty, $request:expr) => {
             if use_get {
@@ -550,7 +549,7 @@ async fn do_unary_call(
                 let request = UnaryRequest::decode_from_slice(proto_bytes)
                     .map_err(|e| ConnectError::internal(format!("decode request: {e}")))?;
                 let resp = do_call!(
-                    CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC,
+                    CONFORMANCE_SERVICE_UNARY_SPEC.with_origin(SpecOrigin::Client),
                     UnaryRequest,
                     UnaryResponseView<'static>,
                     request
@@ -568,7 +567,7 @@ async fn do_unary_call(
                 let request = IdempotentUnaryRequest::decode_from_slice(proto_bytes)
                     .map_err(|e| ConnectError::internal(format!("decode request: {e}")))?;
                 let resp = do_call!(
-                    CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC,
+                    CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_SPEC.with_origin(SpecOrigin::Client),
                     IdempotentUnaryRequest,
                     IdempotentUnaryResponseView<'static>,
                     request
@@ -589,7 +588,7 @@ async fn do_unary_call(
                 // `Spec::client`).
                 use connectrpc_conformance::UnaryRequest;
                 let spec = if other == "Unimplemented" {
-                    CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC
+                    CONFORMANCE_SERVICE_UNIMPLEMENTED_SPEC.with_origin(SpecOrigin::Client)
                 } else {
                     let procedure =
                         format!("/connectrpc.conformance.v1.ConformanceService/{other}");
@@ -752,7 +751,7 @@ async fn do_server_stream_call(
         call_server_stream::<_, ServerStreamRequest, ServerStreamResponseView<'static>>(
             &transport,
             &config,
-            CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC,
+            CONFORMANCE_SERVICE_SERVER_STREAM_SPEC.with_origin(SpecOrigin::Client),
             request,
             options,
         )
@@ -1051,7 +1050,7 @@ async fn do_client_stream_call(
         let resp = call_client_stream::<_, ClientStreamRequest, ClientStreamResponseView<'static>>(
             &transport,
             &config,
-            CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC,
+            CONFORMANCE_SERVICE_CLIENT_STREAM_SPEC.with_origin(SpecOrigin::Client),
             futures::stream::iter(requests),
             options,
         )
@@ -1218,7 +1217,7 @@ async fn do_bidi_stream_call(
         match call_bidi_stream::<_, BidiStreamRequest, BidiStreamResponseView<'static>>(
             &transport,
             &config,
-            CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC,
+            CONFORMANCE_SERVICE_BIDI_STREAM_SPEC.with_origin(SpecOrigin::Client),
             options,
         )
         .await

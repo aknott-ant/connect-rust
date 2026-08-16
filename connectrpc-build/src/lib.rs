@@ -904,9 +904,8 @@ mod tests {
             .expect("read gated __connect.rs");
         let cfg_count = gated.matches("#[cfg(feature = \"client\")]").count();
         assert_eq!(
-            cfg_count, 6,
-            "expected exactly 6 cfg attrs (client struct + impl + one \
-             `*_CLIENT_SPEC` const per each of the fixture's 4 methods) with \
+            cfg_count, 2,
+            "expected exactly 2 cfg attrs (struct + impl) with \
              gate_client_feature=true; got {cfg_count}:\n{gated}"
         );
         // Sanity: the server-side trait + ext trait must not be gated.
@@ -937,9 +936,9 @@ mod tests {
             .expect("read custom __connect.rs");
         let custom_count = custom.matches("#[cfg(feature = \"grpc-client\")]").count();
         assert_eq!(
-            custom_count, 6,
-            "expected exactly 6 custom cfg attrs (struct + impl + 4 method \
-             consts); got {custom_count}:\n{custom}"
+            custom_count, 2,
+            "expected exactly 2 custom cfg attrs (struct + impl); got \
+             {custom_count}:\n{custom}"
         );
         assert!(
             !custom.contains("#[cfg(feature = \"client\")]"),

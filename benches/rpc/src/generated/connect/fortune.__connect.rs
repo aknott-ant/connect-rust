@@ -42,25 +42,14 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const FORTUNE_SERVICE_SERVICE_NAME: &str = "fortune.v1.FortuneService";
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `GetFortunes` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `GetFortunes` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `FORTUNE_SERVICE_GET_FORTUNES_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const FORTUNE_SERVICE_GET_FORTUNES_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
-        "/fortune.v1.FortuneService/GetFortunes",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `FORTUNE_SERVICE_GET_FORTUNES_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const FORTUNE_SERVICE_GET_FORTUNES_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/fortune.v1.FortuneService/GetFortunes",
         ::connectrpc::StreamType::Unary,
     )
@@ -461,7 +450,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                FORTUNE_SERVICE_GET_FORTUNES_CLIENT_SPEC,
+                FORTUNE_SERVICE_GET_FORTUNES_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )

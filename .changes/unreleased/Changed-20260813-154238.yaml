@@ -14,26 +14,23 @@ body: |-
   to
 
   ```rust
-  call_unary(&t, &cfg, GREET_SERVICE_GREET_CLIENT_SPEC, req, opts)
+  call_unary(&t, &cfg, GREET_SERVICE_GREET_SPEC.with_origin(SpecOrigin::Client), req, opts)
   // or, without generated code:
   call_unary(&t, &cfg, Spec::client("/pkg.GreetService/Greet", StreamType::Unary), req, opts)
   ```
 
-  Code generation now emits a `pub const <SERVICE>_<METHOD>_CLIENT_SPEC: Spec`
-  per method (origin `SpecOrigin::Client`, gated with the client feature when
-  `gate_client_feature` is set) next to the existing server-side
-  `<SERVICE>_<METHOD>_SPEC`, and generated client methods pass it through.
-  This is what lets the upcoming client-side interceptors see the method's
-  stream type and idempotency level, not just its path.
+  Generated client methods now pass their method's existing
+  `<SERVICE>_<METHOD>_SPEC` constant with `origin` flipped via the new
+  `Spec::with_origin(SpecOrigin::Client)`. This is what lets the upcoming
+  client-side interceptors see the method's stream type and idempotency
+  level, not just its path.
 
   Notes for hand-written callers: `Spec::client` takes a `&'static str`, so a
   caller whose method names arrive at runtime should intern each distinct
   procedure once rather than leak per call (see the `Spec::client` docs); an
-  entry point given a spec of the wrong stream shape or origin now returns an
-  `Internal` error before sending anything. The server and client constants
-  for one method are not `==` (their `origin` differs); the new
-  `Spec::same_method` compares method identity across sides. Code generation
-  also now fails with a clear message if two methods of one service would
-  produce the same constant name (e.g. `Get` and `GetClient`). Regenerate
-  checked-in code with `task generate:all`.
+  entry point given a spec of the wrong stream shape or a server-origin spec
+  now returns an `Internal` error before sending anything. The value a client
+  interceptor sees is not `==` to the generated constant (its `origin`
+  differs); the new `Spec::same_method` compares method identity across
+  sides. Regenerate checked-in code with `task generate:all`.
 time: 2026-08-13T15:42:38.580786038Z

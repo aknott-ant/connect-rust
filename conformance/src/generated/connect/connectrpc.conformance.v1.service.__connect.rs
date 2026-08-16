@@ -312,140 +312,74 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const CONFORMANCE_SERVICE_SERVICE_NAME: &str = "connectrpc.conformance.v1.ConformanceService";
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Unary` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Unary` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const CONFORMANCE_SERVICE_UNARY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/Unary",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `CONFORMANCE_SERVICE_UNARY_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/connectrpc.conformance.v1.ConformanceService/Unary",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `ServerStream` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `ServerStream` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const CONFORMANCE_SERVICE_SERVER_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/ServerStream",
         ::connectrpc::StreamType::ServerStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `CONFORMANCE_SERVICE_SERVER_STREAM_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/connectrpc.conformance.v1.ConformanceService/ServerStream",
-        ::connectrpc::StreamType::ServerStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `ClientStream` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `ClientStream` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const CONFORMANCE_SERVICE_CLIENT_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/ClientStream",
         ::connectrpc::StreamType::ClientStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `CONFORMANCE_SERVICE_CLIENT_STREAM_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/connectrpc.conformance.v1.ConformanceService/ClientStream",
-        ::connectrpc::StreamType::ClientStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `BidiStream` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `BidiStream` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const CONFORMANCE_SERVICE_BIDI_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/BidiStream",
         ::connectrpc::StreamType::BidiStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `CONFORMANCE_SERVICE_BIDI_STREAM_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/connectrpc.conformance.v1.ConformanceService/BidiStream",
-        ::connectrpc::StreamType::BidiStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Unimplemented` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Unimplemented` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const CONFORMANCE_SERVICE_UNIMPLEMENTED_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/Unimplemented",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `CONFORMANCE_SERVICE_UNIMPLEMENTED_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/connectrpc.conformance.v1.ConformanceService/Unimplemented",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `IdempotentUnary` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `IdempotentUnary` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
-        "/connectrpc.conformance.v1.ConformanceService/IdempotentUnary",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::NoSideEffects);
-/// Client-side sibling of `CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/connectrpc.conformance.v1.ConformanceService/IdempotentUnary",
         ::connectrpc::StreamType::Unary,
     )
@@ -1322,7 +1256,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                CONFORMANCE_SERVICE_UNARY_CLIENT_SPEC,
+                CONFORMANCE_SERVICE_UNARY_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
@@ -1364,7 +1299,8 @@ where
         ::connectrpc::client::call_server_stream(
                 &self.transport,
                 &self.config,
-                CONFORMANCE_SERVICE_SERVER_STREAM_CLIENT_SPEC,
+                CONFORMANCE_SERVICE_SERVER_STREAM_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
@@ -1438,7 +1374,8 @@ where
         ::connectrpc::client::call_client_stream(
                 &self.transport,
                 &self.config,
-                CONFORMANCE_SERVICE_CLIENT_STREAM_CLIENT_SPEC,
+                CONFORMANCE_SERVICE_CLIENT_STREAM_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 requests,
                 options,
             )
@@ -1476,7 +1413,8 @@ where
         ::connectrpc::client::call_bidi_stream(
                 &self.transport,
                 &self.config,
-                CONFORMANCE_SERVICE_BIDI_STREAM_CLIENT_SPEC,
+                CONFORMANCE_SERVICE_BIDI_STREAM_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 options,
             )
             .await
@@ -1519,7 +1457,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                CONFORMANCE_SERVICE_UNIMPLEMENTED_CLIENT_SPEC,
+                CONFORMANCE_SERVICE_UNIMPLEMENTED_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
@@ -1563,7 +1502,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_CLIENT_SPEC,
+                CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )

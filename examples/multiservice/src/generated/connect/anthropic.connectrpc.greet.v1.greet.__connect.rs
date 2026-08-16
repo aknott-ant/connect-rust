@@ -54,25 +54,14 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const GREET_SERVICE_SERVICE_NAME: &str = "anthropic.connectrpc.greet.v1.GreetService";
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Greet` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Greet` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `GREET_SERVICE_GREET_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const GREET_SERVICE_GREET_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
-        "/anthropic.connectrpc.greet.v1.GreetService/Greet",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::NoSideEffects);
-/// Client-side sibling of `GREET_SERVICE_GREET_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const GREET_SERVICE_GREET_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/anthropic.connectrpc.greet.v1.GreetService/Greet",
         ::connectrpc::StreamType::Unary,
     )
@@ -477,7 +466,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                GREET_SERVICE_GREET_CLIENT_SPEC,
+                GREET_SERVICE_GREET_SPEC.with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )

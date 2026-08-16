@@ -170,94 +170,50 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const WELL_KNOWN_TYPES_SERVICE_SERVICE_NAME: &str = "anthropic.connectrpc.wkt.v1.WellKnownTypesService";
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `CreateEvent` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `CreateEvent` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `WELL_KNOWN_TYPES_SERVICE_CREATE_EVENT_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const WELL_KNOWN_TYPES_SERVICE_CREATE_EVENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/anthropic.connectrpc.wkt.v1.WellKnownTypesService/CreateEvent",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `WELL_KNOWN_TYPES_SERVICE_CREATE_EVENT_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const WELL_KNOWN_TYPES_SERVICE_CREATE_EVENT_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/anthropic.connectrpc.wkt.v1.WellKnownTypesService/CreateEvent",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `CalculateDuration` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `CalculateDuration` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `WELL_KNOWN_TYPES_SERVICE_CALCULATE_DURATION_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const WELL_KNOWN_TYPES_SERVICE_CALCULATE_DURATION_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/anthropic.connectrpc.wkt.v1.WellKnownTypesService/CalculateDuration",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `WELL_KNOWN_TYPES_SERVICE_CALCULATE_DURATION_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const WELL_KNOWN_TYPES_SERVICE_CALCULATE_DURATION_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/anthropic.connectrpc.wkt.v1.WellKnownTypesService/CalculateDuration",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `ProcessMetadata` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `ProcessMetadata` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `WELL_KNOWN_TYPES_SERVICE_PROCESS_METADATA_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const WELL_KNOWN_TYPES_SERVICE_PROCESS_METADATA_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/anthropic.connectrpc.wkt.v1.WellKnownTypesService/ProcessMetadata",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `WELL_KNOWN_TYPES_SERVICE_PROCESS_METADATA_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const WELL_KNOWN_TYPES_SERVICE_PROCESS_METADATA_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/anthropic.connectrpc.wkt.v1.WellKnownTypesService/ProcessMetadata",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Heartbeat` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Heartbeat` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `WELL_KNOWN_TYPES_SERVICE_HEARTBEAT_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const WELL_KNOWN_TYPES_SERVICE_HEARTBEAT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
-        "/anthropic.connectrpc.wkt.v1.WellKnownTypesService/Heartbeat",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `WELL_KNOWN_TYPES_SERVICE_HEARTBEAT_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const WELL_KNOWN_TYPES_SERVICE_HEARTBEAT_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/anthropic.connectrpc.wkt.v1.WellKnownTypesService/Heartbeat",
         ::connectrpc::StreamType::Unary,
     )
@@ -904,7 +860,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                WELL_KNOWN_TYPES_SERVICE_CREATE_EVENT_CLIENT_SPEC,
+                WELL_KNOWN_TYPES_SERVICE_CREATE_EVENT_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
@@ -948,7 +905,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                WELL_KNOWN_TYPES_SERVICE_CALCULATE_DURATION_CLIENT_SPEC,
+                WELL_KNOWN_TYPES_SERVICE_CALCULATE_DURATION_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
@@ -992,7 +950,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                WELL_KNOWN_TYPES_SERVICE_PROCESS_METADATA_CLIENT_SPEC,
+                WELL_KNOWN_TYPES_SERVICE_PROCESS_METADATA_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
@@ -1032,7 +991,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                WELL_KNOWN_TYPES_SERVICE_HEARTBEAT_CLIENT_SPEC,
+                WELL_KNOWN_TYPES_SERVICE_HEARTBEAT_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )

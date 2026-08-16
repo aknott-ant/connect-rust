@@ -46,25 +46,14 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const MATH_SERVICE_SERVICE_NAME: &str = "anthropic.connectrpc.math.v1.MathService";
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Add` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Add` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `MATH_SERVICE_ADD_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const MATH_SERVICE_ADD_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
-        "/anthropic.connectrpc.math.v1.MathService/Add",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `MATH_SERVICE_ADD_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const MATH_SERVICE_ADD_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/anthropic.connectrpc.math.v1.MathService/Add",
         ::connectrpc::StreamType::Unary,
     )
@@ -468,7 +457,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                MATH_SERVICE_ADD_CLIENT_SPEC,
+                MATH_SERVICE_ADD_SPEC.with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )

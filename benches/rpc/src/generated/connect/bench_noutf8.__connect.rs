@@ -42,25 +42,14 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const LOG_INGEST_SERVICE_SERVICE_NAME: &str = "bench.noutf8.v1.LogIngestService";
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Ingest` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Ingest` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `LOG_INGEST_SERVICE_INGEST_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const LOG_INGEST_SERVICE_INGEST_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
-        "/bench.noutf8.v1.LogIngestService/Ingest",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `LOG_INGEST_SERVICE_INGEST_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const LOG_INGEST_SERVICE_INGEST_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/bench.noutf8.v1.LogIngestService/Ingest",
         ::connectrpc::StreamType::Unary,
     )
@@ -460,7 +449,8 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                LOG_INGEST_SERVICE_INGEST_CLIENT_SPEC,
+                LOG_INGEST_SERVICE_INGEST_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )

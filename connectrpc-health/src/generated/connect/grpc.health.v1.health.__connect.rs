@@ -42,50 +42,26 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const HEALTH_SERVICE_NAME: &str = "grpc.health.v1.Health";
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Check` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Check` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `HEALTH_CHECK_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const HEALTH_CHECK_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/grpc.health.v1.Health/Check",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `HEALTH_CHECK_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-#[cfg(feature = "client")]
-pub const HEALTH_CHECK_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/grpc.health.v1.Health/Check",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Watch` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Watch` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `HEALTH_WATCH_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const HEALTH_WATCH_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
-        "/grpc.health.v1.Health/Watch",
-        ::connectrpc::StreamType::ServerStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `HEALTH_WATCH_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-#[cfg(feature = "client")]
-pub const HEALTH_WATCH_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/grpc.health.v1.Health/Watch",
         ::connectrpc::StreamType::ServerStream,
     )
@@ -585,7 +561,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                HEALTH_CHECK_CLIENT_SPEC,
+                HEALTH_CHECK_SPEC.with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
@@ -624,7 +600,7 @@ where
         ::connectrpc::client::call_server_stream(
                 &self.transport,
                 &self.config,
-                HEALTH_WATCH_CLIENT_SPEC,
+                HEALTH_WATCH_SPEC.with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )

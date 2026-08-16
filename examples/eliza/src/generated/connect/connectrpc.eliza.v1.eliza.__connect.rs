@@ -126,71 +126,38 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const ELIZA_SERVICE_SERVICE_NAME: &str = "connectrpc.eliza.v1.ElizaService";
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Say` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Say` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `ELIZA_SERVICE_SAY_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const ELIZA_SERVICE_SAY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.eliza.v1.ElizaService/Say",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::NoSideEffects);
-/// Client-side sibling of `ELIZA_SERVICE_SAY_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const ELIZA_SERVICE_SAY_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/connectrpc.eliza.v1.ElizaService/Say",
-        ::connectrpc::StreamType::Unary,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::NoSideEffects);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Converse` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Converse` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `ELIZA_SERVICE_CONVERSE_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const ELIZA_SERVICE_CONVERSE_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.eliza.v1.ElizaService/Converse",
         ::connectrpc::StreamType::BidiStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `ELIZA_SERVICE_CONVERSE_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const ELIZA_SERVICE_CONVERSE_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
-        "/connectrpc.eliza.v1.ElizaService/Converse",
-        ::connectrpc::StreamType::BidiStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the server-side `Introduce` RPC.
+/// Static [`Spec`](::connectrpc::Spec) for the `Introduce` RPC.
 ///
 /// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec).
-///
-/// Client sibling: `ELIZA_SERVICE_INTRODUCE_CLIENT_SPEC`. The two are not `==` (their
-/// [`origin`](::connectrpc::Spec::origin) differs); use
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) or compare
-/// `procedure` to match this method on either side.
+/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
+/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
+/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
+/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
 pub const ELIZA_SERVICE_INTRODUCE_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
-        "/connectrpc.eliza.v1.ElizaService/Introduce",
-        ::connectrpc::StreamType::ServerStream,
-    )
-    .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Client-side sibling of `ELIZA_SERVICE_INTRODUCE_SPEC` (same method,
-/// [`SpecOrigin::Client`](::connectrpc::SpecOrigin::Client), so not `==` to it):
-/// what generated client methods pass to the runtime and what a
-/// client-side interceptor observes.
-pub const ELIZA_SERVICE_INTRODUCE_CLIENT_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::client(
         "/connectrpc.eliza.v1.ElizaService/Introduce",
         ::connectrpc::StreamType::ServerStream,
     )
@@ -746,7 +713,7 @@ where
         ::connectrpc::client::call_unary(
                 &self.transport,
                 &self.config,
-                ELIZA_SERVICE_SAY_CLIENT_SPEC,
+                ELIZA_SERVICE_SAY_SPEC.with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
@@ -784,7 +751,8 @@ where
         ::connectrpc::client::call_bidi_stream(
                 &self.transport,
                 &self.config,
-                ELIZA_SERVICE_CONVERSE_CLIENT_SPEC,
+                ELIZA_SERVICE_CONVERSE_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 options,
             )
             .await
@@ -825,7 +793,8 @@ where
         ::connectrpc::client::call_server_stream(
                 &self.transport,
                 &self.config,
-                ELIZA_SERVICE_INTRODUCE_CLIENT_SPEC,
+                ELIZA_SERVICE_INTRODUCE_SPEC
+                    .with_origin(::connectrpc::SpecOrigin::Client),
                 request,
                 options,
             )
