@@ -199,10 +199,12 @@ pub fn full_body(b: Bytes) -> ClientBody {
 
 /// Walk an error's `source()` chain looking for a [`ConnectError`].
 ///
-/// Boxed trait objects cannot appear as links in the chain: `Box<dyn Error>`
-/// does not itself implement `Error` (the blanket impl requires a sized
-/// type), so every link is a concrete error type and a plain `downcast_ref`
-/// at each link is exhaustive.
+/// A plain `downcast_ref` at each link is exhaustive as long as no link is a
+/// sized smart-pointer wrapper: `Box<dyn Error>` does not itself implement
+/// `Error` (the blanket impl requires a sized type), so a boxed cause is
+/// stored and walked as the concrete type behind it. `ConnectError`'s own
+/// `Arc`'d source is surfaced by dereferencing (`&**arc`), so that link too
+/// carries the wrapped type's vtable rather than `Arc`'s.
 fn find_connect_error_in_chain(
     mut err: &(dyn std::error::Error + 'static),
 ) -> Option<ConnectError> {
@@ -223,13 +225,15 @@ fn find_connect_error_in_chain(
 /// Both built-in transports already produce classified `ConnectError`s
 /// directly, so for them `context` never appears in the surfaced error.
 /// Errors with no `ConnectError` in their chain are wrapped as `unavailable`
-/// with the `context` prefix.
+/// with the `context` prefix; the original error is retained as the
+/// returned `ConnectError`'s `source()` so its cause (DNS failure,
+/// connection reset, timeout, ...) isn't lost.
 fn map_transport_send_error<E>(err: E, context: &str) -> ConnectError
 where
     E: std::error::Error + Send + Sync + 'static,
 {
     find_connect_error_in_chain(&err)
-        .unwrap_or_else(|| ConnectError::unavailable(format!("{context}: {err}")))
+        .unwrap_or_else(|| ConnectError::unavailable_from_transport(context, err))
 }
 
 /// Extra slack added to client-side response buffer caps beyond the message
@@ -280,7 +284,10 @@ pub trait ClientTransport: Clone + Send + Sync + 'static {
     /// discarding any outer wrappers' `Display` context. A transport can use
     /// this to control the surfaced error classification, for example
     /// returning `deadline_exceeded` from a timeout middleware. Errors with
-    /// no `ConnectError` in their chain are wrapped as `unavailable`.
+    /// no `ConnectError` in their chain are wrapped as `unavailable` with the
+    /// original retained as the [source](ConnectError::with_source); a
+    /// transport that builds its own `ConnectError` for such a failure can
+    /// use [`ConnectError::unavailable_from_transport`] to match.
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Send an HTTP request and receive a response.
@@ -795,10 +802,9 @@ impl ClientTransport for HttpClient {
                 }
                 let client = client.clone();
                 Box::pin(async move {
-                    client
-                        .request(request)
-                        .await
-                        .map_err(|e| ConnectError::unavailable(format!("HTTP request failed: {e}")))
+                    client.request(request).await.map_err(|e| {
+                        ConnectError::unavailable_from_transport("HTTP request failed", e)
+                    })
                 })
             }
             #[cfg(feature = "client-tls")]
@@ -816,7 +822,7 @@ impl ClientTransport for HttpClient {
                 let client = client.clone();
                 Box::pin(async move {
                     client.request(request).await.map_err(|e| {
-                        ConnectError::unavailable(format!("HTTPS request failed: {e}"))
+                        ConnectError::unavailable_from_transport("HTTPS request failed", e)
                     })
                 })
             }
@@ -5401,6 +5407,68 @@ mod tests {
         server.abort();
     }
 
+    #[cfg(feature = "client")]
+    #[tokio::test]
+    async fn http_client_plaintext_send_failure_preserves_source() {
+        let http = HttpClient::plaintext();
+        // Port 1 should not have a listener — the OS refuses immediately.
+        let req = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("http://127.0.0.1:1/")
+            .body(full_body(Bytes::new()))
+            .unwrap();
+
+        let err = http
+            .send(req)
+            .await
+            .expect_err("connect to port 1 must fail");
+        assert!(
+            err.message
+                .as_deref()
+                .unwrap()
+                .contains("HTTP request failed"),
+            "unexpected message: {err:?}"
+        );
+        assert!(
+            std::error::Error::source(&err).is_some(),
+            "connection-refused failure must retain its cause as source(): {err:?}"
+        );
+    }
+
+    #[cfg(feature = "client-tls")]
+    #[tokio::test]
+    async fn http_client_tls_send_failure_preserves_source() {
+        let tls_config = std::sync::Arc::new(
+            rustls::ClientConfig::builder()
+                .with_root_certificates(rustls::RootCertStore::empty())
+                .with_no_client_auth(),
+        );
+        let http = HttpClient::with_tls(tls_config);
+        // Port 1 should not have a listener — the OS refuses before any TLS
+        // handshake starts.
+        let req = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("https://127.0.0.1:1/")
+            .body(full_body(Bytes::new()))
+            .unwrap();
+
+        let err = http
+            .send(req)
+            .await
+            .expect_err("connect to port 1 must fail");
+        assert!(
+            err.message
+                .as_deref()
+                .unwrap()
+                .contains("HTTPS request failed"),
+            "unexpected message: {err:?}"
+        );
+        assert!(
+            std::error::Error::source(&err).is_some(),
+            "connection-refused failure must retain its cause as source(): {err:?}"
+        );
+    }
+
     #[test]
     fn client_config_builders_round_trip_through_accessors() {
         // Each `with_*` builder must be readable back through the bare-name
@@ -6817,6 +6885,25 @@ mod tests {
         );
         assert_eq!(mapped.code, ErrorCode::InvalidArgument);
         assert_eq!(mapped.message.as_deref(), Some("bad client config"));
+    }
+
+    #[test]
+    fn transport_send_error_mapper_preserves_source_when_no_connect_error_in_chain() {
+        #[derive(Debug)]
+        struct PlainTransportError;
+
+        impl std::fmt::Display for PlainTransportError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "connection reset by peer")
+            }
+        }
+
+        impl std::error::Error for PlainTransportError {}
+
+        let mapped = map_transport_send_error(PlainTransportError, "request failed");
+        assert_eq!(mapped.code, ErrorCode::Unavailable);
+        let source = std::error::Error::source(&mapped).expect("source must be preserved");
+        assert_eq!(source.to_string(), "connection reset by peer");
     }
 
     #[cfg(feature = "client")]
