@@ -289,6 +289,9 @@ impl std::fmt::Debug for InterceptorChain {
 /// Re-running dispatches the inner interceptors *and the terminal* again.
 /// On the server that means invoking the handler twice, so gate any
 /// re-run on [`Spec::idempotency_level`](crate::Spec::idempotency_level).
+/// Every attempt shares the one request deadline (a retry cannot extend
+/// it) and the one request tracing span; open a span per attempt if they
+/// need to be observable separately.
 #[derive(Clone)]
 pub struct Next<'a> {
     rest: &'a [Arc<dyn Interceptor>],
@@ -393,7 +396,8 @@ impl UnaryRequest {
     /// struct literal) — e.g. around a typed message with
     /// [`Payload::from_message`]. Unlike [`new`](Self::new), does not apply
     /// the context's decode limits to the payload; use `new` for untrusted
-    /// wire bytes. For a retry copy, use [`try_clone`](Self::try_clone).
+    /// wire bytes. For a retry copy, use [`try_clone`](Self::try_clone),
+    /// which keeps the limits.
     pub fn from_parts(ctx: RequestContext, payload: Payload) -> Self {
         Self { ctx, payload }
     }
@@ -446,6 +450,23 @@ impl UnaryResponse {
     pub fn into_encoded(self) -> Result<EncodedResponse, ConnectError> {
         Ok(Response {
             body: self.body.encoded()?.into(),
+            headers: self.headers,
+            trailers: self.trailers,
+            compress: self.compress,
+        })
+    }
+
+    /// [`into_encoded`](Self::into_encoded), but in the format the call
+    /// negotiated rather than the one the payload was built with, so an
+    /// interceptor that short-circuits with
+    /// [`Payload::from_message`] in the wrong format still answers the peer
+    /// in the format it asked for (see [`Payload::encoded_as`]).
+    pub(crate) fn into_encoded_as(
+        self,
+        format: CodecFormat,
+    ) -> Result<EncodedResponse, ConnectError> {
+        Ok(Response {
+            body: self.body.encoded_as(format)?.into(),
             headers: self.headers,
             trailers: self.trailers,
             compress: self.compress,
@@ -593,6 +614,9 @@ where
 /// `NextStream` holds the still-to-run interceptors and the terminal
 /// handler. [`run`](NextStream::run) consumes it: an interceptor can call
 /// `next.run(req, inbound)` at most once. Not calling it short-circuits.
+/// Unlike [`Next`], this is not `Clone`: the inbound stream is consumed as
+/// it is read and cannot be replayed, so a streaming chain runs once by
+/// construction.
 pub struct NextStream<'a> {
     rest: &'a [Arc<dyn Interceptor>],
     terminal: &'a (dyn StreamTerminal + 'a),
@@ -1020,7 +1044,7 @@ pub(crate) async fn call_unary_intercepted<D: crate::Dispatcher>(
     };
     let req = UnaryRequest::new(ctx, body, format);
     let resp = Next::new(interceptors, &terminal).run(req).await?;
-    resp.into_encoded()
+    resp.into_encoded_as(format)
 }
 
 /// `UnaryTerminal` that hands off to the dispatcher's `call_unary`.
@@ -1175,6 +1199,84 @@ mod tests {
             "p1",
             "diagnostic headers on a short-circuit error must survive the chain"
         );
+    }
+
+    /// A short-circuit response built in the wrong format is re-encoded in
+    /// the negotiated one, so the peer never receives proto bytes under a
+    /// JSON content-type (or vice versa).
+    #[cfg(feature = "json")]
+    #[tokio::test]
+    async fn call_unary_intercepted_answers_in_the_negotiated_format() {
+        struct Canned;
+        #[async_trait::async_trait]
+        impl Interceptor for Canned {
+            async fn intercept_unary(
+                &self,
+                _req: UnaryRequest,
+                _next: Next<'_>,
+            ) -> Result<UnaryResponse, ConnectError> {
+                // The obvious-but-wrong spelling: a proto payload on a JSON call.
+                Ok(Response::new(Payload::from_message(
+                    StringValue::from("canned"),
+                    CodecFormat::Proto,
+                )))
+            }
+        }
+        struct Unreached;
+        impl crate::Dispatcher for Unreached {
+            fn lookup(&self, _: &str) -> Option<crate::dispatcher::MethodDescriptor> {
+                None
+            }
+            fn call_unary(
+                &self,
+                _: &str,
+                _: RequestContext,
+                _: Payload,
+                _: CodecFormat,
+            ) -> crate::dispatcher::UnaryResult {
+                unreachable!("short-circuited")
+            }
+            fn call_server_streaming(
+                &self,
+                _: &str,
+                _: RequestContext,
+                _: Bytes,
+                _: CodecFormat,
+            ) -> crate::dispatcher::StreamingResult {
+                unreachable!()
+            }
+            fn call_client_streaming(
+                &self,
+                _: &str,
+                _: RequestContext,
+                _: crate::dispatcher::RequestStream,
+                _: CodecFormat,
+            ) -> crate::dispatcher::UnaryResult {
+                unreachable!()
+            }
+            fn call_bidi_streaming(
+                &self,
+                _: &str,
+                _: RequestContext,
+                _: crate::dispatcher::RequestStream,
+                _: CodecFormat,
+            ) -> crate::dispatcher::StreamingResult {
+                unreachable!()
+            }
+        }
+        let chain: Vec<Arc<dyn Interceptor>> = vec![Arc::new(Canned)];
+        let resp = call_unary_intercepted(
+            &Unreached,
+            &chain,
+            "svc/Method",
+            RequestContext::default(),
+            Bytes::from_static(b"{}"),
+            CodecFormat::Json,
+        )
+        .await
+        .unwrap();
+        let rt: StringValue = crate::codec::decode_json(&resp.body.into_contiguous()).unwrap();
+        assert_eq!(rt.value, "canned");
     }
 
     /// `call_unary_intercepted` propagates a short-circuit error verbatim,

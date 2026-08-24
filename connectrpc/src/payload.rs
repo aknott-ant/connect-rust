@@ -206,7 +206,9 @@ impl Payload {
     /// decode cache.
     ///
     /// The copy is equivalent **on the wire**, not through the typed API:
-    /// it carries bytes, not the replacement, so on the copy
+    /// it carries bytes, not the replacement (a replacement's bytes keep
+    /// buffa's default decode limits rather than this payload's wire
+    /// limits, as [`view`](Payload::view) already grants them), so on the copy
     /// [`message`](Payload::message) / [`take_message`](Payload::take_message)
     /// perform a real decode, a wrong-type read reports `InvalidArgument`
     /// rather than `Internal`, and [`view`](Payload::view) follows the
@@ -216,10 +218,16 @@ impl Payload {
     ///
     /// Returns an error if encoding a replacement fails.
     pub fn try_clone(&self) -> Result<Self, ConnectError> {
-        Ok(
-            Self::new(self.encoded()?, self.format)
-                .with_decode_options(self.decode_options.clone()),
-        )
+        let copy = Self::new(self.encoded()?, self.format);
+        Ok(if self.replaced.is_some() {
+            // The body was encoded from a message this process holds, so the
+            // wire-facing limits (an amplification defence against peer
+            // bytes) do not apply to it — the same exemption `view` gives
+            // the replacement before the copy is taken.
+            copy
+        } else {
+            copy.with_decode_options(self.decode_options.clone())
+        })
     }
 
     /// Attach the decode limits a typed accessor should honour.
@@ -251,7 +259,9 @@ impl Payload {
         &self.bytes
     }
 
-    /// The codec format the wire bytes are encoded in.
+    /// The codec format of the body: the format the wire bytes arrived in,
+    /// or, for a [`from_message`](Payload::from_message) payload, the format
+    /// it will be encoded in.
     pub fn format(&self) -> CodecFormat {
         self.format
     }
@@ -410,8 +420,8 @@ impl Payload {
     /// - [`internal`](ConnectError::internal) if a replacement set with
     ///   [`set_message`](Payload::set_message) fails to re-encode or
     ///   decode as `V` — server-supplied data, so the asymmetry with the
-    ///   wire-bytes case is intentional. A replacement is decoded without
-    ///   the limits for the same reason.
+    ///   wire-bytes case is intentional. A replacement is decoded under
+    ///   buffa's defaults rather than these limits for the same reason.
     pub fn view<V>(&self) -> Result<OwnedView<V>, ConnectError>
     where
         V: MessageView<'static>,
@@ -483,8 +493,36 @@ impl Payload {
             return Ok(cached.clone());
         }
         let bytes = replaced.message.encode(self.format)?;
-        let _ = replaced.encoded.set(bytes.clone());
-        Ok(bytes)
+        // A racing loser returns the winner's allocation, so later
+        // `try_clone` / `view` calls share one memo.
+        Ok(replaced.encoded.get_or_init(|| bytes).clone())
+    }
+
+    /// The body encoded in `format`, which the dispatch path negotiated with
+    /// the peer and which may differ from this payload's own
+    /// [`format`](Payload::format).
+    ///
+    /// A payload built from a message is simply encoded in the requested
+    /// format (memoized only when it matches the payload's own format). A
+    /// payload carrying wire bytes in another format cannot be transcoded
+    /// without knowing its message type, so that is an error rather than a
+    /// body the peer cannot parse.
+    ///
+    /// # Errors
+    ///
+    /// `internal` if a replacement fails to encode, or if the payload holds
+    /// wire bytes in a format other than `format`.
+    pub fn encoded_as(&self, format: CodecFormat) -> Result<Bytes, ConnectError> {
+        if format == self.format {
+            return self.encoded();
+        }
+        match &self.replaced {
+            Some(replaced) => replaced.message.encode(format),
+            None => Err(ConnectError::internal(format!(
+                "payload carries {:?} wire bytes but the call negotiated {format:?}",
+                self.format
+            ))),
+        }
     }
 }
 
@@ -668,6 +706,32 @@ mod tests {
         let p = Payload::from_message(StringValue::from("j"), CodecFormat::Json);
         let rt: StringValue = decode_json(&p.encoded().unwrap()).unwrap();
         assert_eq!(rt.value, "j");
+    }
+
+    /// The dispatch path answers in the format the call negotiated, not the
+    /// one the interceptor happened to build the payload with.
+    #[cfg(feature = "json")]
+    #[test]
+    fn encoded_as_transcodes_a_message_payload() {
+        let p = Payload::from_message(StringValue::from("x"), CodecFormat::Proto);
+        let json = p.encoded_as(CodecFormat::Json).unwrap();
+        let rt: StringValue = decode_json(&json).unwrap();
+        assert_eq!(rt.value, "x");
+        // Same-format requests still hit the memo.
+        let a = p.encoded_as(CodecFormat::Proto).unwrap();
+        let b = p.encoded().unwrap();
+        assert!(std::ptr::eq(a.as_ptr(), b.as_ptr()));
+    }
+
+    #[test]
+    fn encoded_as_rejects_wire_bytes_in_another_format() {
+        let p = proto_payload("x");
+        let err = p.encoded_as(CodecFormat::Json).unwrap_err();
+        assert_eq!(err.code, crate::ErrorCode::Internal, "{err:?}");
+        assert!(
+            err.message.as_deref().unwrap_or("").contains("negotiated"),
+            "{err:?}"
+        );
     }
 
     #[test]

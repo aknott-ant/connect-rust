@@ -156,11 +156,13 @@ impl RequestContext {
     /// auth token, a propagated trace context, a tenant id. Inner
     /// interceptors and the handler see the mutated map.
     ///
-    /// Protocol-derived values (the [`deadline`](Self::deadline), codec,
-    /// negotiated compression) were resolved from the headers *before*
-    /// interceptors ran; rewriting `connect-timeout-ms`, `grpc-timeout`,
-    /// `content-type`, or `accept-encoding` here changes only what
-    /// downstream code reads, not dispatch behavior. As with
+    /// On the server, protocol-derived values (the
+    /// [`deadline`](Self::deadline), codec, negotiated compression) were
+    /// resolved from the headers *before* interceptors ran; rewriting
+    /// `connect-timeout-ms`, `grpc-timeout`, `content-type`, or
+    /// `accept-encoding` here changes only what downstream code reads, not
+    /// dispatch behavior. On a client-side chain the edited map is what goes
+    /// on the wire, so those headers are load-bearing there. As with
     /// [`extensions_mut`](Self::extensions_mut), a *handler* mutating its
     /// own by-value `ctx` affects nothing downstream.
     pub fn headers_mut(&mut self) -> &mut HeaderMap {
