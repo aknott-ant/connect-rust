@@ -1,7 +1,7 @@
 kind: Added
 body: |-
-  Interceptor plumbing that a re-runnable (retry-style) chain and the upcoming
-  client-side interceptors both need. All additive; no dispatch behavior
+  Interceptor plumbing for a re-runnable (retry-style) chain and for
+  interceptors that synthesize a response. All additive; no dispatch behavior
   changes:
 
   - **`RequestContext::headers_mut()`** — mutable access to request headers,
@@ -12,9 +12,10 @@ body: |-
     counterpart of `Payload::new`: wraps a typed message and encodes only when
     `encoded()` runs, memoizing the result (a replacement set with
     `set_message` is now also encoded at most once). Lets an interceptor
-    short-circuit with a synthesized response, and is how the client call
-    path will hand typed requests to the chain. `bytes()` is empty for such a
-    payload; `Payload`'s `Debug` output now labels that field `wire_len`.
+    short-circuit with a synthesized response; the dispatch path re-encodes
+    it in the negotiated format if the two differ (`Payload::encoded_as`).
+    `bytes()` is empty for such a payload; `Payload`'s `Debug` output now
+    labels that field `wire_len`.
   - **`Payload::try_clone()`** and **`UnaryRequest::try_clone()`** — explicit
     copies (encoded bytes, cloned context, empty decode cache) for an
     interceptor that needs a second request.

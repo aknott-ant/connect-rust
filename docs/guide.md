@@ -1037,7 +1037,7 @@ boundary, span builder, validator, or rate limiter actually wants.
 
 ```rust,ignore
 use connectrpc::interceptor::{UnaryRequest, UnaryResponse};
-use connectrpc::{ConnectError, Interceptor, Next};
+use connectrpc::{ConnectError, Interceptor, Next, Payload, Response};
 
 struct Logging;
 
