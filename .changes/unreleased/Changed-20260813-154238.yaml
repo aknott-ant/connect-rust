@@ -14,6 +14,8 @@ body: |-
   to
 
   ```rust
+  use connectrpc::{Spec, SpecOrigin, StreamType};
+
   call_unary(&t, &cfg, GREET_SERVICE_GREET_SPEC.with_origin(SpecOrigin::Client), req, opts)
   // or, without generated code:
   call_unary(&t, &cfg, Spec::client("/pkg.GreetService/Greet", StreamType::Unary), req, opts)
@@ -29,7 +31,8 @@ body: |-
   caller whose method names arrive at runtime should intern each distinct
   procedure once rather than leak per call (see the `Spec::client` docs); an
   entry point given a spec of the wrong stream shape or a server-origin spec
-  now returns an `Internal` error before sending anything. The value a client
+  now returns an `Internal` error before sending anything, as does a procedure
+  that is not a valid URI path. The value a client
   interceptor sees is not `==` to the generated constant (its `origin`
   differs); the new `Spec::same_method` compares method identity across
   sides. Regenerate checked-in code with `task generate:all`.

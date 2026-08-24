@@ -312,73 +312,37 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const CONFORMANCE_SERVICE_SERVICE_NAME: &str = "connectrpc.conformance.v1.ConformanceService";
-/// Static [`Spec`](::connectrpc::Spec) for the `Unary` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `Unary` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const CONFORMANCE_SERVICE_UNARY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/Unary",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the `ServerStream` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `ServerStream` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const CONFORMANCE_SERVICE_SERVER_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/ServerStream",
         ::connectrpc::StreamType::ServerStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the `ClientStream` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `ClientStream` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const CONFORMANCE_SERVICE_CLIENT_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/ClientStream",
         ::connectrpc::StreamType::ClientStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the `BidiStream` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `BidiStream` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const CONFORMANCE_SERVICE_BIDI_STREAM_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/BidiStream",
         ::connectrpc::StreamType::BidiStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the `Unimplemented` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `Unimplemented` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const CONFORMANCE_SERVICE_UNIMPLEMENTED_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/Unimplemented",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the `IdempotentUnary` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `IdempotentUnary` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.conformance.v1.ConformanceService/IdempotentUnary",
         ::connectrpc::StreamType::Unary,

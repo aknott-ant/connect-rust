@@ -126,37 +126,19 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const ELIZA_SERVICE_SERVICE_NAME: &str = "connectrpc.eliza.v1.ElizaService";
-/// Static [`Spec`](::connectrpc::Spec) for the `Say` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `Say` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const ELIZA_SERVICE_SAY_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.eliza.v1.ElizaService/Say",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::NoSideEffects);
-/// Static [`Spec`](::connectrpc::Spec) for the `Converse` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `Converse` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const ELIZA_SERVICE_CONVERSE_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.eliza.v1.ElizaService/Converse",
         ::connectrpc::StreamType::BidiStream,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the `Introduce` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `Introduce` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const ELIZA_SERVICE_INTRODUCE_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/connectrpc.eliza.v1.ElizaService/Introduce",
         ::connectrpc::StreamType::ServerStream,

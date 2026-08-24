@@ -54,13 +54,7 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const SERVER_REFLECTION_SERVICE_NAME: &str = "grpc.reflection.v1alpha.ServerReflection";
-/// Static [`Spec`](::connectrpc::Spec) for the `ServerReflectionInfo` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `ServerReflectionInfo` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const SERVER_REFLECTION_SERVER_REFLECTION_INFO_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
         ::connectrpc::StreamType::BidiStream,

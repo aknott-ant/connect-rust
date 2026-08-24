@@ -42,25 +42,13 @@ for ::buffa::view::OwnedView<
 }
 /// Full service name for this service.
 pub const HEALTH_SERVICE_NAME: &str = "grpc.health.v1.Health";
-/// Static [`Spec`](::connectrpc::Spec) for the `Check` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `Check` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const HEALTH_CHECK_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/grpc.health.v1.Health/Check",
         ::connectrpc::StreamType::Unary,
     )
     .with_idempotency_level(::connectrpc::IdempotencyLevel::Unknown);
-/// Static [`Spec`](::connectrpc::Spec) for the `Watch` RPC.
-///
-/// The dispatcher surfaces this on
-/// [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated
-/// client passes it with [`origin`](::connectrpc::Spec::origin) set to
-/// [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with
-/// [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`.
+/// Static [`Spec`](::connectrpc::Spec) for the `Watch` RPC, as seen by the server; the generated client passes it with [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with [`Spec::same_method`](::connectrpc::Spec::same_method)).
 pub const HEALTH_WATCH_SPEC: ::connectrpc::Spec = ::connectrpc::Spec::server(
         "/grpc.health.v1.Health/Watch",
         ::connectrpc::StreamType::ServerStream,

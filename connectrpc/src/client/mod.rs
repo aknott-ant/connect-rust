@@ -866,7 +866,10 @@ pub struct ClientConfig {
 impl ClientConfig {
     /// Create a new client configuration with the given base URI.
     ///
-    /// Uses Connect protocol with protobuf encoding by default.
+    /// Uses Connect protocol with protobuf encoding by default. Request
+    /// URIs are the base's scheme, authority and path prefix (trailing
+    /// slash trimmed) followed by the method's `/package.Service/Method`;
+    /// a query string on the base URI is not carried over.
     pub fn new(base_uri: Uri) -> Self {
         Self {
             base_uri,
@@ -1471,7 +1474,12 @@ fn procedure_uri(
     use http::uri::PathAndQuery;
     let base_path = config.base_uri.path().trim_end_matches('/');
     let path_and_query = if base_path.is_empty() && query.is_none() {
-        PathAndQuery::from_static(procedure)
+        // `from_static` would panic on a byte that is illegal in a path (a
+        // space, `#`, non-ASCII); `check_client_spec` only checks the slash
+        // shape, so validate here and report it like every other bad URI.
+        // `Bytes::from_static` keeps this branch allocation-free.
+        PathAndQuery::from_maybe_shared(Bytes::from_static(procedure.as_bytes()))
+            .map_err(|e| ConnectError::internal(format!("invalid request path: {e}")))?
     } else {
         let mut s = String::with_capacity(
             base_path.len() + procedure.len() + query.map_or(0, |q| q.len() + 1),

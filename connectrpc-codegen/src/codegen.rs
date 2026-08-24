@@ -1314,11 +1314,7 @@ fn check_method_collisions(service_name: &str, service: &ServiceDescriptorProto)
     for m in &service.method {
         let proto_name = m.name.as_deref().unwrap_or("");
         let snake = proto_name.to_snake_case();
-        let idents = [
-            snake.clone(),
-            format!("{snake}_with_options"),
-            format!("{snake}_spec"),
-        ];
+        let idents = [snake.clone(), format!("{snake}_with_options")];
         for ident in &idents {
             if let Some(prev) = seen.get(ident) {
                 anyhow::bail!(
@@ -1823,12 +1819,10 @@ fn generate_spec_consts(
                 _ => quote! { ::connectrpc::IdempotencyLevel::Unknown },
             };
             let doc = doc_attrs(&format!(
-                "Static [`Spec`](::connectrpc::Spec) for the `{method_name}` RPC.\n\n\
-                 The dispatcher surfaces this on\n\
-                 [`RequestContext::spec`](::connectrpc::RequestContext::spec); the generated\n\
-                 client passes it with [`origin`](::connectrpc::Spec::origin) set to\n\
-                 [`Client`](::connectrpc::SpecOrigin::Client), so on that side compare with\n\
-                 [`Spec::same_method`](::connectrpc::Spec::same_method) rather than `==`."
+                "Static [`Spec`](::connectrpc::Spec) for the `{method_name}` RPC, as seen \
+                 by the server; the generated client passes it with \
+                 [`origin`](::connectrpc::Spec::origin) `Client` (compare across sides with \
+                 [`Spec::same_method`](::connectrpc::Spec::same_method))."
             ));
             quote! {
                 #doc
@@ -4983,11 +4977,11 @@ mod tests {
         assert!(chat.contains("StreamType::BidiStream"), "{chat}");
     }
 
-    /// `Get` + `GetSpec` collide (`get_spec` is both `Get`'s constant stem
-    /// and `GetSpec`'s method name); generation fails naming both methods
-    /// instead of emitting a module the consumer cannot compile.
+    /// `Get` + `GetSpec` do not collide: their constants are `X_GET_SPEC` and
+    /// `X_GET_SPEC_SPEC`, and `get_spec` is only ever a client method name.
+    /// Methods named `Client` and `Spec` are ordinary too.
     #[test]
-    fn colliding_spec_const_names_are_rejected() {
+    fn spec_const_names_do_not_collide_with_method_names() {
         let m = |name: &str| MethodDescriptorProto {
             name: Some(name.into()),
             input_type: Some(".pkg.Req".into()),
@@ -4996,22 +4990,7 @@ mod tests {
         };
         let service = ServiceDescriptorProto {
             name: Some("X".into()),
-            method: vec![m("Get"), m("GetSpec")],
-            ..Default::default()
-        };
-        let msg = check_method_collisions("X", &service)
-            .expect_err("Get + GetSpec collide on get_spec")
-            .to_string();
-        assert!(msg.contains("get_spec"), "{msg}");
-        assert!(
-            msg.contains("\"Get\"") && msg.contains("\"GetSpec\""),
-            "{msg}"
-        );
-
-        // The ordinary case, including methods named `Client` and `Spec`, passes.
-        let service = ServiceDescriptorProto {
-            name: Some("X".into()),
-            method: vec![m("Get"), m("Put"), m("Client"), m("Spec")],
+            method: vec![m("Get"), m("GetSpec"), m("Put"), m("Client"), m("Spec")],
             ..Default::default()
         };
         check_method_collisions("X", &service).unwrap();

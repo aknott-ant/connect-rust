@@ -115,8 +115,13 @@ pub enum SpecOrigin {
 /// proto-declared idempotency contract, and which generated artifact
 /// (server or client) produced it.
 ///
-/// `Spec` is `Copy` and contains only `'static` data, so it can be stored,
-/// captured in closures, and compared freely with no allocation.
+/// `Spec` is `Copy` and contains only `'static` data, so it can be stored
+/// and captured in closures with no allocation. `PartialEq` and `Hash`
+/// cover every field, including [`origin`](Spec::origin): the value a
+/// client-side interceptor sees is *not* `==` to the generated
+/// `FOO_SERVICE_BAR_SPEC` constant (origin `Server`), and a `HashMap` keyed
+/// by the constants misses it. Compare method identity across sides with
+/// [`same_method`](Spec::same_method).
 ///
 /// Construct one with [`Spec::server`] or [`Spec::client`]. The struct is
 /// `#[non_exhaustive]` so future fields can be added without a breaking
@@ -161,10 +166,12 @@ impl Spec {
     /// constructor in `const` position, so `Spec` constants live in
     /// `.rodata`.
     ///
-    /// In debug builds, asserts that `procedure` starts with `/` and
-    /// contains a `/Service/Method` separator so a malformed test fixture
-    /// fails loudly rather than producing misleading [`service`](Spec::service)
-    /// / [`method`](Spec::method) accessor results.
+    /// # Panics
+    ///
+    /// In debug builds, if `procedure` does not start with `/` or has no
+    /// `/Service/Method` separator (a `const` fails at compile time), so a
+    /// malformed fixture fails loudly rather than producing misleading
+    /// [`service`](Spec::service) / [`method`](Spec::method) results.
     pub const fn server(procedure: &'static str, stream_type: StreamType) -> Self {
         debug_assert_well_formed(procedure);
         Self {
@@ -183,10 +190,12 @@ impl Spec {
     /// constructor in `const` position, so `Spec` constants live in
     /// `.rodata`.
     ///
-    /// In debug builds, asserts that `procedure` starts with `/` and
-    /// contains a `/Service/Method` separator so a malformed test fixture
-    /// fails loudly rather than producing misleading [`service`](Spec::service)
-    /// / [`method`](Spec::method) accessor results.
+    /// # Panics
+    ///
+    /// In debug builds, if `procedure` does not start with `/` or has no
+    /// `/Service/Method` separator (a `const` fails at compile time). The
+    /// client entry points repeat that check in every build, plus a check
+    /// that the path is a valid URI path, and report `internal` instead.
     ///
     /// # Building one without generated code
     ///
@@ -229,16 +238,17 @@ impl Spec {
         self
     }
 
-    /// Whether `self` and `other` describe the same RPC method, ignoring
-    /// which side ([`origin`](Spec::origin)) they describe.
+    /// Whether `self` and `other` name the same RPC method: compares
+    /// [`procedure`](Spec::procedure) only, ignoring [`origin`](Spec::origin)
+    /// (and the other fields, which are derived from the method).
     ///
     /// `Spec` derives `PartialEq` over *all* fields, so the value a client
     /// interceptor sees (origin `Client`) is **not** `==` to the generated
-    /// `FOO_SERVICE_BAR_SPEC` constant (origin `Server`). Use this (or
-    /// compare [`procedure`](Spec::procedure) directly) when asking "is this
-    /// the `Bar` method?" regardless of side.
+    /// `FOO_SERVICE_BAR_SPEC` constant (origin `Server`). Use this when
+    /// asking "is this the `Bar` method?" regardless of side:
+    /// `spec.same_method(FOO_SERVICE_BAR_SPEC)`.
     #[must_use]
-    pub fn same_method(&self, other: &Spec) -> bool {
+    pub fn same_method(self, other: Spec) -> bool {
         self.procedure == other.procedure
     }
 
@@ -359,9 +369,9 @@ mod tests {
                 .with_idempotency_level(IdempotencyLevel::NoSideEffects)
         );
         assert_ne!(SERVER, CLIENT, "PartialEq includes origin");
-        assert!(SERVER.same_method(&CLIENT));
-        assert!(CLIENT.same_method(&SERVER));
-        assert!(!CLIENT.same_method(&OTHER));
+        assert!(SERVER.same_method(CLIENT));
+        assert!(CLIENT.same_method(SERVER));
+        assert!(!CLIENT.same_method(OTHER));
     }
 
     #[test]

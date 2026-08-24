@@ -24,6 +24,7 @@ use connectrpc::{
     CodecFormat, CompressionRegistry, Spec, SpecOrigin,
     compression::{GzipProvider, ZstdProvider},
 };
+use connectrpc_conformance::CONFORMANCE_SERVICE_SERVICE_NAME;
 use connectrpc_conformance::ClientCompatRequest;
 use connectrpc_conformance::ClientResponseResult;
 use connectrpc_conformance::Codec;
@@ -458,6 +459,27 @@ async fn execute_request(req: &ClientCompatRequest) -> ExecResult {
 // do_unary_call -- uses the library's call_unary via ConformanceTransport
 // ============================================================================
 
+/// The generated constant for the RPC `req` addresses, flipped to the client
+/// side — or, should a future suite name a different service or method, an
+/// ad-hoc client `Spec` of the same stream shape, so the request is never
+/// silently sent to the generated RPC instead. Leaked per call; fine in a
+/// test binary (a production dynamic caller should intern, see
+/// `Spec::client`).
+fn client_spec(req: &ClientCompatRequest, default: Spec) -> Spec {
+    let service = req
+        .service
+        .as_deref()
+        .unwrap_or(CONFORMANCE_SERVICE_SERVICE_NAME);
+    let method = req.method.as_deref().unwrap_or(default.method());
+    if service == CONFORMANCE_SERVICE_SERVICE_NAME && method == default.method() {
+        return default.with_origin(SpecOrigin::Client);
+    }
+    Spec::client(
+        Box::leak(format!("/{service}/{method}").into_boxed_str()),
+        default.stream_type,
+    )
+}
+
 /// Perform a unary RPC call using the library.
 async fn do_unary_call(
     req: &ClientCompatRequest,
@@ -549,7 +571,7 @@ async fn do_unary_call(
                 let request = UnaryRequest::decode_from_slice(proto_bytes)
                     .map_err(|e| ConnectError::internal(format!("decode request: {e}")))?;
                 let resp = do_call!(
-                    CONFORMANCE_SERVICE_UNARY_SPEC.with_origin(SpecOrigin::Client),
+                    client_spec(req, CONFORMANCE_SERVICE_UNARY_SPEC),
                     UnaryRequest,
                     UnaryResponseView<'static>,
                     request
@@ -567,7 +589,7 @@ async fn do_unary_call(
                 let request = IdempotentUnaryRequest::decode_from_slice(proto_bytes)
                     .map_err(|e| ConnectError::internal(format!("decode request: {e}")))?;
                 let resp = do_call!(
-                    CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_SPEC.with_origin(SpecOrigin::Client),
+                    client_spec(req, CONFORMANCE_SERVICE_IDEMPOTENT_UNARY_SPEC),
                     IdempotentUnaryRequest,
                     IdempotentUnaryResponseView<'static>,
                     request
@@ -588,12 +610,14 @@ async fn do_unary_call(
                 // `Spec::client`).
                 use connectrpc_conformance::UnaryRequest;
                 let spec = if other == "Unimplemented" {
-                    CONFORMANCE_SERVICE_UNIMPLEMENTED_SPEC.with_origin(SpecOrigin::Client)
+                    client_spec(req, CONFORMANCE_SERVICE_UNIMPLEMENTED_SPEC)
                 } else {
-                    let procedure =
-                        format!("/connectrpc.conformance.v1.ConformanceService/{other}");
+                    let service = req
+                        .service
+                        .as_deref()
+                        .unwrap_or(CONFORMANCE_SERVICE_SERVICE_NAME);
                     Spec::client(
-                        Box::leak(procedure.into_boxed_str()),
+                        Box::leak(format!("/{service}/{other}").into_boxed_str()),
                         connectrpc::StreamType::Unary,
                     )
                 };
@@ -751,7 +775,7 @@ async fn do_server_stream_call(
         call_server_stream::<_, ServerStreamRequest, ServerStreamResponseView<'static>>(
             &transport,
             &config,
-            CONFORMANCE_SERVICE_SERVER_STREAM_SPEC.with_origin(SpecOrigin::Client),
+            client_spec(req, CONFORMANCE_SERVICE_SERVER_STREAM_SPEC),
             request,
             options,
         )
@@ -1050,7 +1074,7 @@ async fn do_client_stream_call(
         let resp = call_client_stream::<_, ClientStreamRequest, ClientStreamResponseView<'static>>(
             &transport,
             &config,
-            CONFORMANCE_SERVICE_CLIENT_STREAM_SPEC.with_origin(SpecOrigin::Client),
+            client_spec(req, CONFORMANCE_SERVICE_CLIENT_STREAM_SPEC),
             futures::stream::iter(requests),
             options,
         )
@@ -1217,7 +1241,7 @@ async fn do_bidi_stream_call(
         match call_bidi_stream::<_, BidiStreamRequest, BidiStreamResponseView<'static>>(
             &transport,
             &config,
-            CONFORMANCE_SERVICE_BIDI_STREAM_SPEC.with_origin(SpecOrigin::Client),
+            client_spec(req, CONFORMANCE_SERVICE_BIDI_STREAM_SPEC),
             options,
         )
         .await
